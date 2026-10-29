@@ -8,7 +8,8 @@ export const TABELAS_BACKUP = [
   'users', 'system_settings', 'payment_methods', 'finance_categories', 'measurement_fields', 'service_categories', 'service_catalog',
   'clients', 'orders', 'order_items', 'order_item_services', 'order_status_history', 'order_photos',
   'client_measurements', 'measurement_versions', 'measurement_values',
-  'cash_sessions', 'cash_movements', 'customer_credits', 'message_logs', 'audit_logs',
+  'suppliers', 'materials', 'purchases', 'payables',
+  'cash_sessions', 'cash_movements', 'customer_credits', 'stock_movements', 'production_events', 'appointments', 'message_logs', 'audit_logs',
 ] as const;
 
 const POR_PAGINA = 500;

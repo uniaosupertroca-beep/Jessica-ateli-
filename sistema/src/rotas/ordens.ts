@@ -6,7 +6,8 @@ import { ErroApp, naoEncontrado, semPermissao, traduzirErroBanco } from '../lib/
 import { recalcularStatus } from '../lib/status';
 import { agora, chaveIdempotencia, exigir, hoje, lerCorpo, pode, textoBusca, uuid, zCentavos, zData } from '../lib/util';
 import { lerConfigAtelie } from './config';
-import { MODELOS_MENSAGEM, STATUS_DE_PRODUCAO, STATUS_OS, subtotal, transicoesManuais } from '../../public/js/regras.js';
+import { cargaPorDia } from './agenda';
+import { duracao, minutosEntre, MODELOS_MENSAGEM, STATUS_DE_PRODUCAO, STATUS_OS, subtotal, transicoesManuais } from '../../public/js/regras.js';
 
 export const rotasOrdens = new Hono<AppEnv>();
 
@@ -93,9 +94,10 @@ export async function carregarOS(c: Context<AppEnv>, id: string) {
   delete os.idempotency_key;
   const verValores = pode(c, 'os.financeiro.ver');
   const verContato = pode(c, 'clientes.ver');
-  const [cliente, itens, servicos, historico, fotos, pagamentos, mensagens, credito] = await Promise.all([
+  const [cliente, itens, servicos, historico, fotos, pagamentos, mensagens, credito, materiais, compromissos] = await Promise.all([
     db.prepare(`SELECT id, nome ${verContato ? ', telefone, whatsapp, observacoes, preferencias' : ''} FROM clients WHERE id = ?`).bind(os.client_id).first(),
-    db.prepare(`SELECT i.id, i.seq, i.codigo, i.posicao, i.peca, i.descricao, i.prazo, i.responsavel_id, i.status_producao, u.nome AS responsavel_nome
+    db.prepare(`SELECT i.id, i.seq, i.codigo, i.posicao, i.peca, i.descricao, i.prazo, i.responsavel_id, i.status_producao, u.nome AS responsavel_nome,
+          i.urgente, i.obs_interna, i.tempo_real_min, i.retrabalhos, i.iniciado_em, i.finalizado_em
         FROM order_items i LEFT JOIN users u ON u.id = i.responsavel_id WHERE i.order_id = ? ORDER BY i.posicao, i.seq`).bind(id).all(),
     db.prepare(`SELECT s.id, s.item_id, s.service_id, s.descricao, s.unidade, s.quantidade, s.valor_unitario_centavos, s.subtotal_centavos,
           s.tempo_min, s.posicao FROM order_item_services s JOIN order_items i ON i.id = s.item_id WHERE i.order_id = ?
@@ -113,6 +115,11 @@ export async function carregarOS(c: Context<AppEnv>, id: string) {
     db.prepare(`SELECT ml.modelo, ml.situacao, ml.criado_em, u.nome AS usuario FROM message_logs ml LEFT JOIN users u ON u.id = ml.criado_por
         WHERE ml.order_id = ? ORDER BY ml.criado_em DESC`).bind(id).all(),
     verValores ? db.prepare('SELECT COALESCE(SUM(valor_centavos),0) AS saldo FROM customer_credits WHERE client_id = ?').bind(os.client_id).first<{ saldo: number }>() : null,
+    db.prepare(`SELECT sm.id, sm.material_id, m.nome, m.unidade, sm.quantidade, sm.custo_unitario_centavos, sm.item_id, sm.tipo, sm.reverte_de, sm.criado_em,
+          (SELECT r.id FROM stock_movements r WHERE r.reverte_de = sm.id) AS revertido_por
+        FROM stock_movements sm JOIN materials m ON m.id = sm.material_id WHERE sm.order_id = ? ORDER BY sm.criado_em`).bind(id).all(),
+    db.prepare(`SELECT a.id, a.tipo, a.titulo, a.dia, a.hora_inicio, a.hora_fim, a.status, a.item_id, u.nome AS profissional
+        FROM appointments a LEFT JOIN users u ON u.id = a.profissional_id WHERE a.order_id = ? ORDER BY a.dia, a.hora_inicio`).bind(id).all(),
   ]);
   const itensComServicos = itens.results.map(i => ({
     ...i,
@@ -123,6 +130,8 @@ export async function carregarOS(c: Context<AppEnv>, id: string) {
   return {
     ...os, cliente, itens: itensComServicos, historico: historico.results, fotos: fotos.results,
     pagamentos: pagamentos.results, mensagens: mensagens.results, credito_cliente: credito?.saldo,
+    materiais: verValores ? materiais.results : materiais.results.map(m => ({ ...m, custo_unitario_centavos: undefined })),
+    compromissos: compromissos.results,
   };
 }
 
@@ -169,14 +178,25 @@ const zOS = z.object({
 type DadosOS = z.infer<typeof zOS>;
 
 /** Ocupação do dia (OS não canceladas com esse prazo) e confirmação quando lotado. */
-async function conferirCapacidade(c: Context<AppEnv>, prazo: string, ignorarId: string | null, confirmado?: boolean) {
+async function conferirCapacidade(c: Context<AppEnv>, prazo: string, ignorarId: string | null, confirmado?: boolean, tempoNovoMin = 0) {
+  if (confirmado) return;
   const cfg = await lerConfigAtelie(c.env.DB);
   const r = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM orders WHERE prazo = ? AND status <> 'cancelada' AND id IS NOT ?")
     .bind(prazo, ignorarId).first<{ n: number }>();
   const n = r?.n ?? 0;
-  if (n >= cfg.capacidade_diaria && !confirmado)
+  if (n >= cfg.capacidade_diaria)
     throw new ErroApp(409, 'dia_lotado', `O dia escolhido já tem ${n} de ${cfg.capacidade_diaria} entregas. Confirme para encaixar mesmo assim.`,
       { ocupacao: n, capacidade: cfg.capacidade_diaria });
+  // Capacidade por horas de trabalho (quando as profissionais têm capacidade diária cadastrada).
+  const { dias } = await cargaPorDia(c.env.DB, prazo, prazo);
+  const dia = dias[prazo];
+  if (dia && dia.capacidade_min > 0 && tempoNovoMin > 0 && dia.demanda_min + tempoNovoMin > dia.capacidade_min)
+    throw new ErroApp(409, 'dia_lotado', `Para ${prazo.split('-').reverse().join('/')} já estão previstas ${duracao(dia.demanda_min)} de trabalho; com esta OS seriam ${duracao(dia.demanda_min + tempoNovoMin)}, acima da capacidade de ${duracao(dia.capacidade_min)}. Confirme para encaixar mesmo assim.`,
+      { demanda_min: dia.demanda_min, capacidade_min: dia.capacidade_min });
+}
+
+function tempoDaOS(d: DadosOS, catalogo: Map<string, { tempo_min: number }>) {
+  return d.itens.reduce((t, it) => t + it.servicos.reduce((s, x) => s + (x.tempo_min ?? (x.service_id ? catalogo.get(x.service_id)?.tempo_min ?? 0 : 0)), 0), 0);
 }
 
 async function validarReferencias(c: Context<AppEnv>, d: DadosOS) {
@@ -258,7 +278,7 @@ rotasOrdens.post('/', async c => {
   if (d.prazo < d.aberta_em) throw new ErroApp(422, 'dados_invalidos', 'O prazo não pode ser antes da abertura.');
   const catalogo = await validarReferencias(c, d);
   conferirPrecos(c, d, catalogo, [], 0);
-  await conferirCapacidade(c, d.prazo, null, d.confirmar_lotado);
+  await conferirCapacidade(c, d.prazo, null, d.confirmar_lotado, tempoDaOS(d, catalogo));
   const id = uuid();
   const em = agora();
   const u = c.get('usuario').id;
@@ -304,7 +324,7 @@ rotasOrdens.put('/:id', async c => {
     'SELECT s.id, s.item_id, s.service_id, s.valor_unitario_centavos FROM order_item_services s JOIN order_items i ON i.id = s.item_id WHERE i.order_id = ?',
   ).bind(id).all<LinhaAtual>();
   conferirPrecos(c, d, catalogo, linhas, atual.desconto_centavos);
-  if (d.prazo !== atual.prazo) await conferirCapacidade(c, d.prazo, id, d.confirmar_lotado);
+  if (d.prazo !== atual.prazo) await conferirCapacidade(c, d.prazo, id, d.confirmar_lotado, tempoDaOS(d, catalogo));
   const { results: itensAtuais } = await db.prepare('SELECT id, seq, peca, status_producao FROM order_items WHERE order_id = ?')
     .bind(id).all<{ id: string; seq: number; peca: string; status_producao: string }>();
   const existentes = new Set(itensAtuais.map(i => i.id));
@@ -412,36 +432,102 @@ rotasOrdens.patch('/:id/itens/:itemId', async c => {
   const d = await lerCorpo(c, z.object({
     status_producao: z.enum(['aguardando', 'em_execucao', 'aguardando_prova', 'ajustes_finais', 'finalizado']).optional(),
     responsavel_id: z.string().max(64).nullable().optional(),
+    assumir: z.boolean().optional(),
+    urgente: z.boolean().optional(),
+    obs_interna: z.string().trim().max(1000).optional(),
+    tempo_manual_min: z.number().int().min(1).max(1440).optional(),
   }));
   const item = await db.prepare(
-    `SELECT i.status_producao, i.responsavel_id, o.status FROM order_items i JOIN orders o ON o.id = i.order_id WHERE i.id = ? AND o.id = ?`,
-  ).bind(itemId, id).first<{ status_producao: string; responsavel_id: string | null; status: string }>();
+    `SELECT i.status_producao, i.responsavel_id, i.iniciado_em, i.urgente, i.obs_interna, o.status
+     FROM order_items i JOIN orders o ON o.id = i.order_id WHERE i.id = ? AND o.id = ?`,
+  ).bind(itemId, id).first<{ status_producao: string; responsavel_id: string | null; iniciado_em: string | null; urgente: number; obs_interna: string; status: string }>();
   if (!item) throw naoEncontrado('Peça');
   const u = c.get('usuario');
-  if (u.papel === 'costureira' && item.responsavel_id !== u.id) throw semPermissao();
-  if (d.responsavel_id !== undefined) {
+  if (d.assumir) {
+    // Qualquer profissional de produção pode assumir uma peça que ainda está sem responsável.
+    if (item.responsavel_id && item.responsavel_id !== u.id) throw new ErroApp(409, 'ja_atribuida', 'Esta peça já tem responsável.');
+    d.responsavel_id = u.id;
+  } else if (u.papel === 'costureira' && item.responsavel_id !== u.id) throw semPermissao();
+  if (d.responsavel_id !== undefined && !d.assumir) {
     exigir(c, 'producao.atribuir');
     if (d.responsavel_id) {
       const ok = await db.prepare('SELECT 1 FROM users WHERE id = ? AND ativo = 1').bind(d.responsavel_id).first();
       if (!ok) throw new ErroApp(422, 'responsavel_invalido', 'Profissional inválido ou inativo.');
     }
   }
+  if (d.urgente !== undefined) exigir(c, 'producao.atribuir');
   if (d.status_producao && !STATUS_DE_PRODUCAO.includes(item.status))
     throw new ErroApp(409, 'os_nao_aprovada', item.status === 'pausada' ? 'A OS está pausada.' : 'A OS precisa estar aprovada para a produção andar.');
   const em = agora();
+  const novo = d.status_producao && d.status_producao !== item.status_producao ? d.status_producao : null;
+  const ev = (tipo: string, minutos: number | null = null, texto = '') =>
+    db.prepare('INSERT INTO production_events (id, order_id, item_id, tipo, minutos, texto, user_id, em) VALUES (?,?,?,?,?,?,?,?)')
+      .bind(uuid(), id, itemId, tipo, minutos, texto, u.id, em);
   const stmts: D1PreparedStatement[] = [
     db.prepare("INSERT INTO guards (motivo) SELECT 'os_bloqueada' FROM orders WHERE id = ? AND status IN ('entregue','cancelada','pausada')").bind(id),
-    db.prepare('UPDATE order_items SET status_producao = COALESCE(?, status_producao), responsavel_id = CASE WHEN ? THEN ? ELSE responsavel_id END WHERE id = ?')
-      .bind(d.status_producao ?? null, d.responsavel_id !== undefined ? 1 : 0, d.responsavel_id ?? null, itemId),
+    // A peça não pode ter mudado de etapa enquanto a tela estava aberta (evita somar tempo duas vezes).
+    db.prepare("INSERT INTO guards (motivo) SELECT 'versao_desatualizada' WHERE NOT EXISTS (SELECT 1 FROM order_items WHERE id = ? AND status_producao = ?)")
+      .bind(itemId, item.status_producao),
   ];
-  if (d.status_producao && d.status_producao !== item.status_producao)
+  const sets: string[] = [];
+  const binds: unknown[] = [];
+  if (novo) {
+    sets.push('status_producao = ?');
+    binds.push(novo);
+    // Tempo efetivo: soma cada período "em execução" (limitado a 10 h por período, para um cronômetro esquecido não distorcer).
+    if (item.status_producao === 'em_execucao' && item.iniciado_em) {
+      const min = Math.min(600, minutosEntre(item.iniciado_em, em));
+      sets.push('tempo_real_min = tempo_real_min + ?', 'iniciado_em = NULL');
+      binds.push(min);
+      stmts.push(ev(novo === 'finalizado' ? 'fim' : 'pausa', min));
+    }
+    if (novo === 'em_execucao') {
+      sets.push('iniciado_em = ?');
+      binds.push(em);
+      stmts.push(ev('inicio'));
+    }
+    if (novo === 'finalizado') {
+      sets.push('finalizado_em = ?');
+      binds.push(em);
+      if (item.status_producao !== 'em_execucao') stmts.push(ev('fim'));
+    }
+    if (item.status_producao === 'finalizado') {
+      sets.push('retrabalhos = retrabalhos + 1', 'finalizado_em = NULL');
+      stmts.push(ev('retrabalho', null, `voltou para ${novo}`));
+    }
     stmts.push(db.prepare('INSERT INTO order_status_history (id, order_id, item_id, de, para, user_id, em) VALUES (?,?,?,?,?,?,?)')
-      .bind(uuid(), id, itemId, item.status_producao, d.status_producao, u.id, em));
+      .bind(uuid(), id, itemId, item.status_producao, novo, u.id, em));
+  }
+  if (d.responsavel_id !== undefined && d.responsavel_id !== item.responsavel_id) {
+    sets.push('responsavel_id = ?');
+    binds.push(d.responsavel_id);
+    stmts.push(ev('atribuicao', null, d.assumir ? 'assumiu a peça' : d.responsavel_id ? 'nova responsável' : 'sem responsável'));
+  }
+  if (d.urgente !== undefined && (d.urgente ? 1 : 0) !== item.urgente) {
+    sets.push('urgente = ?');
+    binds.push(d.urgente ? 1 : 0);
+    stmts.push(ev('urgencia', null, d.urgente ? 'marcada como urgente' : 'urgência retirada'));
+  }
+  if (d.obs_interna !== undefined && d.obs_interna !== item.obs_interna) {
+    sets.push('obs_interna = ?');
+    binds.push(d.obs_interna);
+    stmts.push(ev('observacao', null, d.obs_interna));
+  }
+  if (d.tempo_manual_min) {
+    sets.push('tempo_real_min = tempo_real_min + ?');
+    binds.push(d.tempo_manual_min);
+    stmts.push(ev('tempo', d.tempo_manual_min, 'tempo lançado manualmente'));
+  }
+  if (sets.length) stmts.push(db.prepare(`UPDATE order_items SET ${sets.join(', ')} WHERE id = ?`).bind(...binds, itemId));
   stmts.push(...recalcularStatus(db, id, u.id, em), auditoria(c, 'producao', 'order_items', itemId, d));
   try {
     await db.batch(stmts);
   } catch (e) {
     throw traduzirErroBanco(e) ?? e;
+  }
+  if (c.req.query('resposta') === 'curta') {
+    const os = await db.prepare('SELECT status FROM orders WHERE id = ?').bind(id).first<{ status: string }>();
+    return c.json({ ok: true, status_os: os?.status });
   }
   return c.json(await carregarOS(c, id));
 });

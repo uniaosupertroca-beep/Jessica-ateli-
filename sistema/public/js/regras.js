@@ -129,6 +129,7 @@ export const MODELOS_MENSAGEM = {
   orcamento: 'Envio de orçamento',
   aprovacao: 'Solicitação de aprovação',
   prova: 'Agendamento de prova',
+  lembrete_prova: 'Lembrete de prova',
   pronta: 'Aviso de peça pronta',
   retirada: 'Lembrete de retirada',
   agradecimento: 'Agradecimento após a entrega',
@@ -178,6 +179,8 @@ export function montarMensagem(modelo, dados) {
       return `Olá, ${nome}! O orçamento da ${os} ficou em ${brl(dados.total)}. Podemos seguir com o serviço? Responda esta mensagem para aprovar.`;
     case 'prova':
       return `Olá, ${nome}! ${maiuscula(pecas)} (${os}) já ${d.plural ? 'podem ser provadas' : d.fem ? 'pode ser provada' : 'pode ser provado'} no ${at}.${dados.dataProva ? ` Sugerimos ${dataBR(dados.dataProva)}.` : ''} Qual o melhor dia e horário para você?`;
+    case 'lembrete_prova':
+      return `Olá, ${nome}! Lembrete: sua prova no ${at} está marcada para ${dataBR(dados.dataProva)}${dados.horaProva ? ` às ${dados.horaProva}` : ''} (${os}). Até lá!`;
     case 'pronta':
       return `Olá, ${nome}! ${maiuscula(pecas)} referente à ${os} ${pronta} para retirada no ${at}.${frase} Aguardamos você!`;
     case 'retirada':
@@ -261,4 +264,88 @@ export function situacaoDia(qtd, capacidade, limiteQuaseCheio) {
   if (qtd >= capacidade) return 'lotado';
   if (qtd >= limiteQuaseCheio) return 'quase';
   return 'livre';
+}
+
+/* ---------------- produção ---------------- */
+
+export const COLUNAS_KANBAN = ['aguardando', 'em_execucao', 'aguardando_prova', 'ajustes_finais', 'finalizado'];
+
+/** Minutos → "1 h 30 min". */
+export function duracao(min) {
+  const m = Math.max(0, Math.round(Number(min) || 0));
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return r ? `${h} h ${r} min` : `${h} h`;
+}
+
+/** Minutos inteiros entre dois instantes ISO (mínimo 0). */
+export function minutosEntre(inicioIso, fimIso) {
+  return Math.max(0, Math.round((new Date(fimIso).getTime() - new Date(inicioIso).getTime()) / 60000));
+}
+
+/* ---------------- preço sugerido ---------------- */
+
+/**
+ * Calculadora de preço sugerido (o administrador decide o preço final):
+ *   custo direto = tempo × custo por hora + materiais
+ *   custo total  = custo direto × (1 + despesas indiretas %)
+ *   preço        = custo total × (1 + margem %)
+ * Retorna centavos, arredondado para cima em múltiplos de R$ 0,50.
+ */
+export function precoSugerido({ tempoMin = 0, custoHoraCentavos = 0, materiaisCentavos = 0, indiretasPct = 0, margemPct = 0 }) {
+  const direto = (tempoMin / 60) * custoHoraCentavos + materiaisCentavos;
+  const total = direto * (1 + indiretasPct / 100);
+  const preco = total * (1 + margemPct / 100);
+  return { direto: Math.round(direto), total: Math.round(total), preco: Math.ceil(preco / 50) * 50 };
+}
+
+/* ---------------- agenda ---------------- */
+
+export const TIPOS_AGENDA = {
+  prova: 'Prova', entrega: 'Entrega', retirada: 'Retirada', recebimento: 'Recebimento de encomenda',
+  atendimento: 'Atendimento', prazo_producao: 'Prazo de produção', ausencia: 'Ausência de profissional',
+};
+
+/** Dia da semana (0 = domingo) de uma data AAAA-MM-DD. */
+export function diaDaSemana(iso) {
+  return new Date(iso + 'T12:00:00Z').getUTCDay();
+}
+
+/** Dois horários (HH:MM) se sobrepõem? Sem horário = dia todo. */
+export function horariosConflitam(a, b) {
+  const ai = a.hora_inicio || '00:00', af = a.hora_fim || a.hora_inicio || '23:59';
+  const bi = b.hora_inicio || '00:00', bf = b.hora_fim || b.hora_inicio || '23:59';
+  if (!a.hora_fim && a.hora_inicio && !b.hora_fim && b.hora_inicio) return a.hora_inicio === b.hora_inicio;
+  return ai < bf && bi < af;
+}
+
+/** Situação da carga de trabalho do dia em minutos. */
+export function situacaoCarga(demandaMin, capacidadeMin) {
+  if (capacidadeMin <= 0) return demandaMin > 0 ? 'lotado' : 'livre';
+  const p = demandaMin / capacidadeMin;
+  return p > 1 ? 'lotado' : p >= 0.8 ? 'quase' : 'livre';
+}
+
+/* ---------------- estoque ---------------- */
+
+export const CATEGORIAS_MATERIAL = {
+  tecido: 'Tecidos', linha: 'Linhas', ziper: 'Zíperes', botao: 'Botões', elastico: 'Elásticos',
+  entretela: 'Entretelas', agulha: 'Agulhas', aviamento: 'Aviamentos', outro: 'Outros materiais',
+};
+export const UNIDADES_ESTOQUE = { un: 'unidade', m: 'metro', cm: 'centímetro', pct: 'pacote', rolo: 'rolo', kg: 'quilo', g: 'grama', cx: 'caixa' };
+export const TIPOS_MOVIMENTO = { compra: 'Entrada por compra', consumo: 'Consumo em OS', devolucao: 'Devolução', perda: 'Perda', ajuste: 'Ajuste de inventário', reversao: 'Reversão' };
+
+/** Soma quantidades fracionadas sem erro de arredondamento (3 casas). */
+export function somarQtd(a, b) {
+  return Math.round((a + b) * 1000) / 1000;
+}
+
+/** Converte valores de um relatório em CSV (separador ;, compatível com Excel em português). */
+export function paraCSV(colunas, linhas) {
+  const cel = v => {
+    const t = v === null || v === undefined ? '' : String(v);
+    return /[;"\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  return [colunas.map(c => cel(c.titulo)).join(';'), ...linhas.map(l => colunas.map(c => cel(c.valor(l))).join(';'))].join('\r\n');
 }

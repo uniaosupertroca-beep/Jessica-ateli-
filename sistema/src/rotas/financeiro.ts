@@ -119,7 +119,7 @@ rotasFinanceiro.post('/financeiro/lancamentos/:id/estorno', async c => {
     `SELECT m.*, p.eh_credito_cliente FROM cash_movements m JOIN payment_methods p ON p.id = m.forma_id WHERE m.id = ?`,
   ).bind(c.req.param('id')).first<{
     id: string; tipo: 'entrada' | 'saida'; natureza: string; valor_centavos: number; forma_id: string; categoria_id: string; descricao: string;
-    order_id: string | null; client_id: string | null; eh_credito_cliente: number;
+    order_id: string | null; client_id: string | null; eh_credito_cliente: number; payable_id: string | null;
   }>();
   if (!o) throw naoEncontrado('Lançamento');
   if (o.natureza === 'estorno') throw new ErroApp(409, 'estorno_invalido', 'Um estorno não pode ser estornado.');
@@ -133,6 +133,8 @@ rotasFinanceiro.post('/financeiro/lancamentos/:id/estorno', async c => {
   // Crédito usado volta para a cliente; crédito recebido sai da cliente.
   if (o.eh_credito_cliente && o.client_id) stmts.push(insertCredito(db, o.client_id, o.valor_centavos, `Estorno: ${o.descricao}`, id, o.order_id, u, em));
   if (o.natureza === 'credito_cliente' && o.client_id) stmts.push(insertCredito(db, o.client_id, -o.valor_centavos, `Estorno: ${o.descricao}`, id, null, u, em));
+  // Estornar o pagamento de uma conta reabre a conta.
+  if (o.payable_id) stmts.push(db.prepare("UPDATE payables SET status = 'aberta', paga_em = NULL WHERE id = ? AND status = 'paga'").bind(o.payable_id));
   stmts.push(auditoria(c, 'estornar', 'cash_movements', o.id, { motivo, estorno: id }));
   const repetido = await executarIdempotente(c, chave, stmts);
   return c.json({ ok: true, id, repetido }, repetido ? 200 : 201);

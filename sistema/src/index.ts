@@ -13,6 +13,12 @@ import { rotasOrdens } from './rotas/ordens';
 import { rotasFinanceiro } from './rotas/financeiro';
 import { rotasFotos } from './rotas/fotos';
 import { rotasPainel } from './rotas/painel';
+import { rotasProducao } from './rotas/producao';
+import { rotasAgenda } from './rotas/agenda';
+import { rotasEstoque } from './rotas/estoque';
+import { rotasPagar } from './rotas/pagar';
+import { rotasRelatorios } from './rotas/relatorios';
+import { rotasBusca } from './rotas/busca';
 
 const app = new Hono<AppEnv>();
 const api = new Hono<AppEnv>();
@@ -49,6 +55,12 @@ api.route('/', rotasMedidas);
 api.route('/', rotasFinanceiro);
 api.route('/', rotasFotos);
 api.route('/', rotasPainel);
+api.route('/', rotasProducao);
+api.route('/', rotasAgenda);
+api.route('/', rotasEstoque);
+api.route('/', rotasPagar);
+api.route('/', rotasRelatorios);
+api.route('/', rotasBusca);
 
 api.post('/admin/backup', async c => {
   exigir(c, 'backup.gerenciar');

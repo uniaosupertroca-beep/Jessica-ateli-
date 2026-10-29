@@ -19,7 +19,8 @@ if (backup.formato !== 'atelie-jessica-backup-v1') throw new Error('Arquivo não
 
 // Travas de inserção que dependem da ordem dos acontecimentos: são removidas durante a carga
 // e recriadas no fim, exatamente como estão nas migrations.
-const TRAVAS = ['cm_caixa_aberto', 'cm_sem_excesso', 'cm_os_cancelada', 'cm_estorno_valido', 'cc_sem_negativo', 'item_com_foto'];
+const TRAVAS = ['cm_caixa_aberto', 'cm_sem_excesso', 'cm_os_cancelada', 'cm_estorno_valido', 'cc_sem_negativo', 'item_com_foto',
+  'sm_sem_negativo', 'sm_reversao_valida', 'sm_atualiza_saldo', 'mat_saldo_protegido'];
 const pasta = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
 const sqlMigrations = readdirSync(pasta).filter(f => f.endsWith('.sql')).sort().map(f => readFileSync(join(pasta, f), 'utf8')).join('\n');
 const definicoes = TRAVAS.map(nome => {
@@ -40,6 +41,7 @@ for (const [tabela, registros] of Object.entries(backup.tabelas)) {
     const reg = { ...r };
     // Caixas entram abertos e são fechados no fim (a trava de caixa fechado bloquearia a carga).
     if (tabela === 'cash_sessions') { reg.fechado_em = null; reg.fechado_por = null; reg.contado_centavos = null; }
+    // O saldo e o custo médio do material são copiados como estavam (o gatilho que os recalcula fica desligado na carga).
     const cols = Object.keys(reg);
     linhas.push(`INSERT INTO ${tabela} (${cols.join(', ')}) VALUES (${cols.map(c => val(reg[c])).join(', ')});`);
     total++;

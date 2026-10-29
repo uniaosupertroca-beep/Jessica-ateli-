@@ -13,6 +13,9 @@ export const PERMISSOES = [
   'pagamentos.receber', 'caixa.operar', 'caixa.reabrir', 'financeiro.ver', 'financeiro.estornar', 'financeiro.lancar',
   'agenda.ver', 'whatsapp.usar',
   'config.editar', 'usuarios.gerenciar', 'backup.gerenciar',
+  'producao.ver', 'agenda.editar',
+  'estoque.ver', 'estoque.movimentar', 'estoque.consumir', 'estoque.negativo', 'estoque.cadastrar',
+  'pagar.ver', 'pagar.editar', 'relatorios.ver', 'auditoria.ver',
 ] as const;
 export type Permissao = (typeof PERMISSOES)[number];
 
@@ -24,10 +27,12 @@ const ATENDENTE: Permissao[] = [
   'fotos.ver', 'fotos.enviar',
   'pagamentos.receber', 'caixa.operar', 'financeiro.ver', 'financeiro.lancar',
   'agenda.ver', 'whatsapp.usar',
+  'producao.ver', 'agenda.editar', 'estoque.ver', 'estoque.movimentar', 'estoque.consumir',
 ];
 
 // Costureira: vê as peças atribuídas a ela, medidas e fotos; atualiza a produção. Sem valores.
-const COSTUREIRA: Permissao[] = ['os.ver', 'medidas.ver', 'fotos.ver', 'fotos.enviar', 'producao.atualizar', 'agenda.ver'];
+const COSTUREIRA: Permissao[] = ['os.ver', 'medidas.ver', 'fotos.ver', 'fotos.enviar', 'producao.atualizar', 'agenda.ver',
+  'producao.ver', 'estoque.ver', 'estoque.consumir'];
 
 export function permissoesDo(papel: Papel): ReadonlySet<string> {
   if (papel === 'admin') return new Set(PERMISSOES);

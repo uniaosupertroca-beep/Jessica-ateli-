@@ -8,8 +8,10 @@ import { agora, exigir, lerCorpo, pode, uuid, zCentavos } from '../lib/util';
 export const rotasConfig = new Hono<AppEnv>();
 
 export async function lerConfigAtelie(db: D1Database) {
-  return (await db.prepare('SELECT nome, telefone, endereco, documento, rodape_os, capacidade_diaria, limite_quase_cheio FROM system_settings WHERE id = 1')
-    .first<{ nome: string; telefone: string; endereco: string; documento: string; rodape_os: string; capacidade_diaria: number; limite_quase_cheio: number }>())!;
+  return (await db.prepare(`SELECT nome, telefone, endereco, documento, rodape_os, capacidade_diaria, limite_quase_cheio, custo_hora_centavos,
+      despesas_indiretas_pct, margem_pct, capacidade_provas_dia, horario_inicio, horario_fim FROM system_settings WHERE id = 1`)
+    .first<{ nome: string; telefone: string; endereco: string; documento: string; rodape_os: string; capacidade_diaria: number; limite_quase_cheio: number;
+      custo_hora_centavos: number; despesas_indiretas_pct: number; margem_pct: number; capacidade_provas_dia: number; horario_inicio: string; horario_fim: string }>())!;
 }
 
 /** Tudo o que as telas precisam para montar formulários. */
@@ -24,7 +26,7 @@ rotasConfig.get('/', async c => {
     db.prepare('SELECT id, nome, ordem, ativo FROM service_categories ORDER BY ordem, nome').all(),
     db.prepare(`SELECT id, categoria_id, nome, descricao, unidade, preco_centavos, tempo_min, custo_mao_obra_centavos, ativo
                 FROM service_catalog ORDER BY nome`).all(),
-    db.prepare("SELECT id, nome, papel FROM users WHERE ativo = 1 ORDER BY nome").all(),
+    db.prepare("SELECT id, nome, papel, capacidade_min_dia FROM users WHERE ativo = 1 ORDER BY nome").all(),
   ]);
   const serv = verValores ? servicos.results : servicos.results.map(s => ({ ...s, preco_centavos: undefined, custo_mao_obra_centavos: undefined }));
   return c.json({
@@ -43,11 +45,19 @@ rotasConfig.patch('/atelie', async c => {
     rodape_os: z.string().trim().max(1000),
     capacidade_diaria: z.number().int().min(1, 'Capacidade mínima de 1.').max(200),
     limite_quase_cheio: z.number().int().min(1).max(200),
-  }).refine(x => x.limite_quase_cheio <= x.capacidade_diaria, { message: '"Quase cheio" não pode ser maior que a capacidade.', path: ['limite_quase_cheio'] }));
+    custo_hora_centavos: zCentavos.default(0),
+    despesas_indiretas_pct: z.number().min(0).max(500).default(0),
+    margem_pct: z.number().min(0).max(1000).default(0),
+    capacidade_provas_dia: z.number().int().min(1).max(100).default(8),
+    horario_inicio: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Horário inválido.').default('09:00'),
+    horario_fim: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Horário inválido.').default('18:00'),
+  }).refine(x => x.horario_fim > x.horario_inicio, { message: 'O horário de fechamento deve ser depois da abertura.', path: ['horario_fim'] }).refine(x => x.limite_quase_cheio <= x.capacidade_diaria, { message: '"Quase cheio" não pode ser maior que a capacidade.', path: ['limite_quase_cheio'] }));
   await c.env.DB.batch([
     c.env.DB.prepare(`UPDATE system_settings SET nome=?, telefone=?, endereco=?, documento=?, rodape_os=?, capacidade_diaria=?,
-        limite_quase_cheio=?, atualizado_em=? WHERE id = 1`)
-      .bind(d.nome, d.telefone, d.endereco, d.documento, d.rodape_os, d.capacidade_diaria, d.limite_quase_cheio, agora()),
+        limite_quase_cheio=?, custo_hora_centavos=?, despesas_indiretas_pct=?, margem_pct=?, capacidade_provas_dia=?, horario_inicio=?, horario_fim=?,
+        atualizado_em=? WHERE id = 1`)
+      .bind(d.nome, d.telefone, d.endereco, d.documento, d.rodape_os, d.capacidade_diaria, d.limite_quase_cheio, d.custo_hora_centavos,
+        d.despesas_indiretas_pct, d.margem_pct, d.capacidade_provas_dia, d.horario_inicio, d.horario_fim, agora()),
     auditoria(c, 'editar', 'system_settings', '1', d),
   ]);
   return c.json({ ok: true });
