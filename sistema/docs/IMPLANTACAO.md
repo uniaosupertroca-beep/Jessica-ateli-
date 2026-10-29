@@ -4,6 +4,15 @@
 
 O sistema usa nomes próprios (`jessica-ateli-sistema`, `atelie-jessica-db`, `atelie-jessica-fotos`, `atelie-jessica-backups`). Ele não altera o protótipo `jessica-ateli` nem nenhum outro projeto da conta.
 
+## Situação em 29/10/2026 (homologação)
+- Recursos **criados**: D1 `atelie-jessica-db-homologacao` (id `6e366e1e-…`, já com a migration 0001 aplicada e registrada), R2 `atelie-jessica-fotos-homologacao` e `atelie-jessica-backups-homologacao`.
+- A conta da administradora foi criada direto no banco, porque o segredo `SETUP_TOKEN` não pôde ser definido. Troque a senha temporária no primeiro acesso, em **Ajustes → Minha conta**.
+- **Falta:** conectar o Worker `jessica-ateli-homologacao` ao GitHub no painel (Workers & Pages → Create → Import a repository):
+  - Root directory: `sistema`
+  - Deploy command: `npx wrangler deploy --env homologacao`
+  - Branch: `claude/atelie-fase1`
+- Produção ainda não foi criada.
+
 ## 1. Pré-requisitos
 - Node.js 20 ou superior.
 - `cd sistema && npm install` (se der erro de dependências, use `npm install --legacy-peer-deps`).

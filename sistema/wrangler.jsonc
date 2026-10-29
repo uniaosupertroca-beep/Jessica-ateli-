@@ -38,7 +38,7 @@
         {
           "binding": "DB",
           "database_name": "atelie-jessica-db-homologacao",
-          "database_id": "00000000-0000-0000-0000-000000000001",
+          "database_id": "6e366e1e-580c-4add-8d1d-ec6bcfb19f11",
           "migrations_dir": "migrations"
         }
       ],
