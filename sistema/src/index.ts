@@ -72,7 +72,8 @@ api.get('/admin/backups', async c => {
   return c.json({ backups: lista.objects.map(o => ({ chave: o.key, tamanho: o.size, criado_em: o.uploaded })).reverse() });
 });
 
-api.notFound(c => c.json({ codigo: 'nao_encontrado', mensagem: 'Endereço da API não encontrado.' }, 404));
+// Qualquer endereço /api desconhecido responde 404 em JSON (nunca a página do sistema).
+api.all('*', c => c.json({ codigo: 'nao_encontrado', mensagem: 'Endereço da API não encontrado.' }, 404));
 
 app.route('/api', api);
 

@@ -346,3 +346,5 @@ label.chk input{width:18px;height:18px}
 .etiqueta .et-logo{max-height:8mm;max-width:22mm;object-fit:contain;display:block;margin-bottom:1mm}
 .a4.previa-doc{width:auto;min-height:0;margin:0;border:1px solid var(--line);border-radius:12px;background:#fff;color:#1a1a1a;padding:18px;font-size:12px;box-shadow:none}
 .logo-atual{max-height:80px;max-width:220px;object-fit:contain;background:repeating-conic-gradient(#f2f2f2 0 25%,#fff 0 50%) 0/16px 16px;border-radius:8px;padding:6px;border:1px solid var(--line)}
+.etiqueta .et-cliente{display:block;font-family:var(--f-body);font-size:12pt;line-height:1.2}
+.etiqueta .et-peca{display:block;font-size:10.5pt;margin:1mm 0}

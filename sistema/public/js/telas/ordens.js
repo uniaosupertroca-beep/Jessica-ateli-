@@ -23,7 +23,7 @@ export async function telaOrdens(el, _p, vivo) {
   el.innerHTML = `<div class="head"><div><h1>Ordens de serviço</h1><p id="os-qtd">Carregando…</p></div>
       ${sessao.pode('os.editar') ? '<a class="btn pri" href="#ordens/nova">+ Nova OS</a>' : ''}</div>
     <div class="panel"><div class="row">
-      <input class="in" id="os-q" type="search" placeholder="Buscar por número ou nome da cliente" value="${esc(filtro.q)}" style="flex:1;min-width:200px" aria-label="Buscar">
+      <input class="in" id="os-q" type="search" placeholder="Buscar por nome da cliente, peça ou nº da OS" value="${esc(filtro.q)}" style="flex:1;min-width:200px" aria-label="Buscar">
       <select class="in" id="os-st" style="width:auto" aria-label="Situação">${FILTROS.map(([k, l]) => `<option value="${k}" ${filtro.status === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
       <label class="row" style="gap:6px">Prazo de <input class="in" type="date" id="os-de" value="${filtro.de}" style="width:auto"></label>
       <label class="row" style="gap:6px">até <input class="in" type="date" id="os-ate" value="${filtro.ate}" style="width:auto"></label>
@@ -106,14 +106,6 @@ export async function telaOS(el, params, vivo) {
   } };
   desenhar(ctx);
   ligarEventos(ctx);
-  // Veio da etiqueta (QR Code): destaca a peça lida.
-  const destacar = sessionStorage.getItem('destacar-peca');
-  if (destacar) {
-    sessionStorage.removeItem('destacar-peca');
-    const i = ctx.f.itens.findIndex(x => x.id === destacar);
-    const bloco = i >= 0 && $(`.peca[data-i="${i}"]`, el);
-    if (bloco) { bloco.classList.add('destaque'); bloco.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-  }
 }
 
 const cfg = () => sessao.config;
@@ -829,11 +821,11 @@ function verFoto(ctx, id) {
 }
 
 /* =========================================================================
- * DOCUMENTOS (A4 / PDF) e ETIQUETAS com QR Code
+ * DOCUMENTOS (A4 / PDF) e ETIQUETAS das peças
  * ======================================================================= */
 export const DOCUMENTOS = {
   os: 'Comprovante de recebimento', orcamento: 'Orçamento', producao: 'Ordem de produção (interna)',
-  pagamento: 'Comprovante de pagamento', retirada: 'Comprovante de retirada', etiquetas: 'Etiquetas com QR Code',
+  pagamento: 'Comprovante de pagamento', retirada: 'Comprovante de retirada', etiquetas: 'Etiquetas das peças',
 };
 
 export async function telaImpressao(el, params) {
@@ -847,12 +839,12 @@ export async function telaImpressao(el, params) {
       <button class="btn pri" data-imprimir>Imprimir / Salvar PDF</button><span class="ajuda">No celular, escolha "Salvar como PDF" na tela de impressão.</span></div>`;
   if (tipo === 'etiquetas') {
     el.innerHTML = barra + `<div class="a4wrap"><div class="etiquetas a4-3" id="etqs"></div></div>`;
-    const { default: qrcode } = await import('../vendor/qrcode.mjs');
-    const qr = texto => { const q = qrcode(0, 'M'); q.addData(texto); q.make(); return q.createSvgTag({ cellSize: 3, margin: 0, scalable: true }); };
-    // O QR leva só o código da peça (sem nome ou telefone da cliente); abrir exige login.
+    // Etiqueta para prender na peça: identifica pela cliente e pela peça (sem QR Code).
     const logo = atelie.doc_logo_etiqueta && urlLogo(atelie);
-    $('#etqs', el).innerHTML = os.itens.map(i => `<div class="etiqueta">${qr(`${location.origin}/#p/${i.codigo}`)}
-      <div>${logo ? `<img class="et-logo" src="${logo}" alt="">` : `<small>${esc(atelie.nome)}</small>`}<b>${esc(i.codigo)}</b><small>${nOS(os.numero)} · ${esc(i.peca.slice(0, 28))}</small><small>Prazo ${dataBR(i.prazo || os.prazo)}</small></div></div>`).join('');
+    $('#etqs', el).innerHTML = os.itens.map(i => `<div class="etiqueta"><div style="min-width:0">
+      ${logo ? `<img class="et-logo" src="${logo}" alt="">` : `<small>${esc(atelie.nome)}</small>`}
+      <b class="et-cliente">${esc(os.cliente.nome)}</b><span class="et-peca">${esc(i.peca)}</span>
+      <small>${nOS(os.numero)} · peça ${esc(i.codigo)} · prazo ${dataBR(i.prazo || os.prazo)}</small></div></div>`).join('');
   } else {
     const fone = os.cliente.telefone && atelie.doc_mostrar_telefone_cliente ? formatarTelefone(os.cliente.telefone) : '';
     const pagos = (os.pagamentos || []).filter(p => !p.estornado_por && !p.estorno_de);

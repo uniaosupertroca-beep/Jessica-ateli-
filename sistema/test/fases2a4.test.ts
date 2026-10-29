@@ -63,20 +63,21 @@ describe('Produção (Kanban, tempos, retrabalho)', () => {
   });
 });
 
-describe('Teste 13 — etiqueta / QR Code', () => {
-  it('o código da peça leva à OS só para quem está logado e pode ver', async () => {
-    const cid = await cliente(adm, 'Cliente QR');
-    const os = await osAprovada(cid);
-    const cod = os.itens[0].codigo;
-    const r = await chamar(`/pecas/${cod}`, { cookie: adm });
-    expect(r.status).toBe(200);
-    expect(r.dados.order_id).toBe(os.id);
-    expect(JSON.stringify(r.dados)).not.toContain('Cliente QR'); // sem dados pessoais
-    expect((await chamar(`/pecas/${cod}`)).status).toBe(401);
-    const cos = await usuario(adm, 'costureira');
-    await chamar(`/ordens/${os.id}/itens/${os.itens[0].id}`, { cookie: adm, metodo: 'PATCH', corpo: { responsavel_id: adm ? (await db().prepare("SELECT id FROM users WHERE papel='admin' LIMIT 1").first<{ id: string }>())!.id : null } });
-    expect((await chamar(`/pecas/${cod}`, { cookie: cos.cookie })).status).toBe(404);
-    expect((await chamar('/pecas/abc', { cookie: adm })).status).toBe(422);
+describe('busca da OS pelo nome da cliente e da peça', () => {
+  it('acha por cliente, por peça (com ou sem acento) e pelas duas palavras juntas', async () => {
+    const cid = await cliente(adm, 'Débora Quintanilha');
+    const os = await criarOS(adm, cid, [{ peca: 'Calça de linho', servicos: [{ descricao: 'Barra', valor: 1000 }] }, { peca: 'Vestido longo', servicos: [{ descricao: 'Ajuste', valor: 1000 }] }]);
+    const outra = await criarOS(adm, await cliente(adm, 'Débora Ramos'), [{ peca: 'Saia', servicos: [{ descricao: 'Barra', valor: 1000 }] }]);
+    const ids = async (q: string) => (await chamar('/ordens?status=todas&q=' + encodeURIComponent(q), { cookie: adm })).dados.ordens.map((o: any) => o.id);
+    expect(await ids('quintanilha')).toEqual([os.id]);
+    expect(await ids('debora')).toEqual(expect.arrayContaining([os.id, outra.id]));
+    expect(await ids('calça de linho')).toContain(os.id);
+    expect(await ids('calca')).toContain(os.id);
+    expect(await ids('débora vestido')).toEqual([os.id]);
+    expect(await ids('débora saia')).toEqual([outra.id]);
+    expect(await ids(String(os.numero))).toContain(os.id);
+    // a rota antiga do QR Code não existe mais
+    expect((await chamar('/pecas/1-1', { cookie: adm })).status).toBe(404);
   });
 });
 

@@ -102,6 +102,13 @@ Em **Configurações → Documentos e logo**:
 
 Tudo vale para OS, orçamento, ordem de produção, comprovantes de pagamento e retirada, ficha de medidas e etiquetas. Na impressão as cores saem como na tela.
 
+## QR Code removido (pedido posterior)
+
+A pedido da Jessica, a OS não é mais aberta por QR Code. Saíram o botão de leitura, o código nas etiquetas, a rota da API e a biblioteca de QR.
+- **Busca da OS:** pelo nome da cliente e da peça, sem diferenciar acentos. Dá para combinar as duas (ex.: "mariana calca"), e o número da OS continua valendo.
+- A busca funciona igual na lista de OS, na pesquisa geral do topo e no Kanban.
+- **Etiquetas:** trazem logo, **nome da cliente**, **peça**, número da OS, código e prazo.
+
 ## Migrations
 
 | Arquivo | O que faz |
@@ -110,5 +117,6 @@ Tudo vale para OS, orçamento, ordem de produção, comprovantes de pagamento e 
 | `0002_login_por_usuario.sql` | Login por usuário e troca de senha obrigatória |
 | `0003_producao_agenda_estoque.sql` | Produção, agenda, estoque, fornecedores, compras e contas a pagar |
 | `0004_documentos_personalizados.sql` | Logo, cor e textos dos documentos |
+| `0005_busca_por_peca.sql` | Nome da peça normalizado para a busca sem acento |
 
 Todas já estão aplicadas na homologação.

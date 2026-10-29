@@ -13,7 +13,7 @@ import { telaEstoque } from './telas/estoque.js';
 import { telaRelatorios } from './telas/relatorios.js';
 import { telaServicos } from './telas/servicos.js';
 import { telaMedidas } from './telas/medidas.js';
-import { barraTopo, abrirPecaPorCodigo } from './busca.js';
+import { barraTopo } from './busca.js';
 
 const ICONES = {
   inicio: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
@@ -92,8 +92,6 @@ export async function renderizar() {
   $('#mais').hidden = true;
   if (!sessao.eu) return;
   const [nome = 'inicio', ...params] = location.hash.slice(1).split('/').map(decodeURIComponent);
-  // Etiqueta / QR Code: #p/<código da peça> abre a OS da peça.
-  if (nome === 'p' && params[0]) return abrirPecaPorCodigo(params[0]);
   const rota = ROTAS[nome] ? nome : 'inicio';
   if (!itensMenu().some(([k]) => k === rota)) return ir('inicio');
   desenharMenu(rota);

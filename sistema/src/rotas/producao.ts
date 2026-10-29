@@ -33,7 +33,7 @@ rotasProducao.get('/producao', async c => {
   if (c.req.query('urgentes') === '1') conds.push('i.urgente = 1');
   const q = textoBusca(c.req.query('q') || '');
   if (q) {
-    conds.push('(c.nome_busca LIKE ? OR i.codigo LIKE ? OR lower(i.peca) LIKE ? OR CAST(o.numero AS TEXT) = ?)');
+    conds.push('(c.nome_busca LIKE ? OR i.codigo LIKE ? OR i.peca_busca LIKE ? OR CAST(o.numero AS TEXT) = ?)');
     binds.push(`%${q}%`, `%${q}%`, `%${q}%`, q);
   }
   const { results } = await c.env.DB.prepare(
@@ -58,20 +58,6 @@ rotasProducao.get('/producao', async c => {
      WHERE u.ativo = 1 AND (u.capacidade_min_dia > 0 OR u.papel = 'costureira') GROUP BY u.id ORDER BY u.nome`,
   ).all();
   return c.json({ hoje: h, pecas: results, profissionais: carga });
-});
-
-/** Etiqueta / QR Code: o código da peça leva à OS (só para quem está logado e pode ver a OS). */
-rotasProducao.get('/pecas/:codigo', async c => {
-  exigir(c, 'os.ver');
-  const codigo = c.req.param('codigo');
-  if (!/^\d{1,9}-\d{1,4}$/.test(codigo)) throw new ErroApp(422, 'codigo_invalido', 'Código de peça inválido.');
-  const u = c.get('usuario');
-  const r = await c.env.DB.prepare(
-    `SELECT i.id AS item_id, i.order_id, i.peca, i.status_producao FROM order_items i JOIN orders o ON o.id = i.order_id
-     WHERE i.codigo = ? ${u.papel === 'costureira' ? 'AND (i.responsavel_id = ? OR o.responsavel_id = ? OR i.responsavel_id IS NULL)' : ''}`,
-  ).bind(codigo, ...(u.papel === 'costureira' ? [u.id, u.id] : [])).first();
-  if (!r) throw naoEncontrado('Peça');
-  return c.json(r);
 });
 
 rotasProducao.get('/producao/:itemId/eventos', async c => {

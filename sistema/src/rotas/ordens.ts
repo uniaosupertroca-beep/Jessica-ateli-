@@ -55,8 +55,12 @@ rotasOrdens.get('/', async c => {
       conds.push('(o.numero = ? OR c.nome_busca LIKE ?)');
       binds.push(Number(q), `%${q}%`);
     } else {
-      conds.push('c.nome_busca LIKE ?');
-      binds.push(`%${q}%`);
+      // Busca pelo nome da cliente e pela peça, sem diferenciar acentos; cada palavra precisa aparecer
+      // em um dos dois (ex.: "mariana calca").
+      for (const p of q.split(' ')) {
+        conds.push('(c.nome_busca LIKE ? OR EXISTS (SELECT 1 FROM order_items bi WHERE bi.order_id = o.id AND bi.peca_busca LIKE ?))');
+        binds.push(`%${p}%`, `%${p}%`);
+      }
     }
   }
   for (const [p, op] of [['de', '>='], ['ate', '<=']] as const) {
@@ -239,15 +243,15 @@ function comandosItens(db: D1Database, orderId: string, d: DadosOS, catalogo: Ma
   d.itens.forEach((it, pos) => {
     let itemId = it.id && existentes.has(it.id) ? it.id : null;
     if (itemId) {
-      stmts.push(db.prepare('UPDATE order_items SET posicao=?, peca=?, descricao=?, prazo=?, responsavel_id=? WHERE id = ? AND order_id = ?')
-        .bind(pos, it.peca, it.descricao, it.prazo ?? null, it.responsavel_id ?? null, itemId, orderId));
+      stmts.push(db.prepare('UPDATE order_items SET posicao=?, peca=?, peca_busca=?, descricao=?, prazo=?, responsavel_id=? WHERE id = ? AND order_id = ?')
+        .bind(pos, it.peca, textoBusca(it.peca), it.descricao, it.prazo ?? null, it.responsavel_id ?? null, itemId, orderId));
     } else {
       itemId = uuid();
       seq += 1;
       stmts.push(db.prepare(
-        `INSERT INTO order_items (id, order_id, seq, codigo, posicao, peca, descricao, prazo, responsavel_id, criado_em)
-         SELECT ?, ?, ?, numero || '-' || ?, ?, ?, ?, ?, ?, ? FROM orders WHERE id = ?`,
-      ).bind(itemId, orderId, seq, String(seq), pos, it.peca, it.descricao, it.prazo ?? null, it.responsavel_id ?? null, em, orderId));
+        `INSERT INTO order_items (id, order_id, seq, codigo, posicao, peca, peca_busca, descricao, prazo, responsavel_id, criado_em)
+         SELECT ?, ?, ?, numero || '-' || ?, ?, ?, ?, ?, ?, ?, ? FROM orders WHERE id = ?`,
+      ).bind(itemId, orderId, seq, String(seq), pos, it.peca, textoBusca(it.peca), it.descricao, it.prazo ?? null, it.responsavel_id ?? null, em, orderId));
     }
     it.servicos.forEach((s, sp) => {
       const tempo = s.tempo_min ?? (s.service_id ? catalogo.get(s.service_id)?.tempo_min ?? 0 : 0);

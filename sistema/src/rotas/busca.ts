@@ -27,7 +27,7 @@ rotasBusca.get('/busca', async c => {
       : [],
     pode(c, 'os.ver')
       ? db.prepare(`SELECT i.codigo, i.peca, i.order_id, o.numero FROM order_items i JOIN orders o ON o.id = i.order_id
-          WHERE (i.codigo LIKE ? OR lower(i.peca) LIKE ?) ${vis} ORDER BY o.numero DESC LIMIT 8`).bind(`${q}%`, `%${q}%`, ...vb).all().then(r => r.results)
+          WHERE (i.codigo LIKE ? OR i.peca_busca LIKE ?) ${vis} ORDER BY o.numero DESC LIMIT 8`).bind(`${q}%`, `%${q}%`, ...vb).all().then(r => r.results)
       : [],
     pode(c, 'estoque.ver')
       ? db.prepare('SELECT id, codigo, nome, quantidade, unidade FROM materials WHERE ativo = 1 AND (lower(nome) LIKE ? OR lower(codigo) LIKE ?) LIMIT 6')
