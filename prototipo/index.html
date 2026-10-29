@@ -1,0 +1,914 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+<title>Ateliê Jessica</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+/* Layout: barra lateral fixa no computador, menu inferior no celular; conteúdo em painéis brancos sobre fundo de linho frio. */
+:root{
+  --bg:#F1F2F6; --surface:#FFFFFF; --sunk:#E8EAF1; --ink:#1D2236; --muted:#5F6680; --line:#D9DCE6;
+  --accent:#A92D63; --accent-ink:#FFFFFF; --accent-soft:#F7E4ED;
+  --ok:#23775A; --ok-soft:#DDF1E8; --warn:#9A6312; --warn-soft:#FBEED6; --crit:#B5352A; --crit-soft:#FADFDB; --info:#2F5E9E; --info-soft:#DFE9F7;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Figtree", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12141C; --surface:#1B1E2A; --sunk:#232736; --ink:#E8EAF3; --muted:#9BA1B8; --line:#2E3345;
+  --accent:#E5709F; --accent-ink:#1B0E14; --accent-soft:#3A2130;
+  --ok:#55C796; --ok-soft:#173327; --warn:#E5AE55; --warn-soft:#3A2C14; --crit:#F07466; --crit-soft:#3D1D1A; --info:#7FAAE8; --info-soft:#1C2A40;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12141C; --surface:#1B1E2A; --sunk:#232736; --ink:#E8EAF3; --muted:#9BA1B8; --line:#2E3345;
+  --accent:#E5709F; --accent-ink:#1B0E14; --accent-soft:#3A2130;
+  --ok:#55C796; --ok-soft:#173327; --warn:#E5AE55; --warn-soft:#3A2C14; --crit:#F07466; --crit-soft:#3D1D1A; --info:#7FAAE8; --info-soft:#1C2A40;
+  color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:1.75rem} h2{font-size:1.2rem} h3{font-size:1rem}
+button,input,select,textarea{font:inherit;color:inherit}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-weight:500}
+.muted{color:var(--muted)}
+.proto{background:var(--accent-soft);color:var(--accent);font-size:.8rem;font-weight:600;text-align:center;padding:6px 16px}
+.app{display:flex;min-height:calc(100% - 30px)}
+.side{width:220px;flex:none;background:var(--surface);border-right:1px solid var(--line);padding:20px 12px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh}
+.brand{padding:4px 10px 18px;display:flex;flex-direction:column;gap:2px}
+.brand b{font-family:var(--f-display);font-size:1.25rem}
+.brand span{font-size:.75rem;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.fita{height:12px;margin:0 10px 14px;background:
+  repeating-linear-gradient(90deg,var(--accent) 0 1px,transparent 1px 40px) 0 0/100% 12px no-repeat,
+  repeating-linear-gradient(90deg,var(--muted) 0 1px,transparent 1px 8px) 0 6px/100% 6px no-repeat;opacity:.55}
+.nav a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:var(--ink);text-decoration:none;font-weight:500}
+.nav a:hover{background:var(--sunk)}
+.nav a.on{background:var(--accent-soft);color:var(--accent);font-weight:700}
+.nav svg{width:18px;height:18px;flex:none}
+.bottom{display:none}
+main{flex:1;min-width:0;padding-block:24px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.head p{margin:4px 0 0;color:var(--muted)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.s21{grid-template-columns:minmax(0,2fr) minmax(0,1fr);align-items:start}
+.s12{grid-template-columns:minmax(0,1fr) minmax(0,2fr);align-items:start}
+.stat{display:flex;flex-direction:column;gap:4px}
+.stat .lbl{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.stat .val{font-family:var(--f-display);font-size:1.7rem;font-weight:700}
+.stat .sub{font-size:.85rem;color:var(--muted)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:600;white-space:nowrap}
+.btn:hover{background:var(--sunk)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--crit);border-color:var(--crit)}
+.btn.sm{padding:5px 10px;font-size:.85rem}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.link{border:none;background:none;color:var(--accent);padding:4px 6px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field label{font-size:.78rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.in{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 10px;min-width:0}
+.in:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:transparent}
+textarea.in{resize:vertical;min-height:60px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.tw{overflow-x:auto;margin:0 -4px}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th{text-align:left;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr.click{cursor:pointer} tr.click:hover td{background:var(--sunk)}
+td.r,th.r{text-align:right}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:99px;font-size:.78rem;font-weight:600;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.p-neutral{background:var(--sunk);color:var(--ink)} .p-info{background:var(--info-soft);color:var(--info)}
+.p-ok{background:var(--ok-soft);color:var(--ok)} .p-muted{background:var(--sunk);color:var(--muted)}
+.p-crit{background:var(--crit-soft);color:var(--crit)} .p-warn{background:var(--warn-soft);color:var(--warn)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{border:none;background:none;padding:10px 14px;cursor:pointer;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap}
+.tabs button.on{color:var(--accent);border-bottom-color:var(--accent)}
+.list{display:flex;flex-direction:column}
+.li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.li:last-child{border-bottom:none}
+.li .t{font-weight:600} .li .s{font-size:.85rem;color:var(--muted)}
+.empty{color:var(--muted);font-size:.9rem;padding:8px 0}
+.pins{display:inline-flex;gap:3px;align-items:center}
+.pins i{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--line);display:block}
+.pins i.f{border-color:currentColor;background:currentColor}
+.s-livre{color:var(--ok)} .s-quase{color:var(--warn)} .s-lotado{color:var(--crit)}
+/* Agenda */
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.cal .dow{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;text-align:center}
+.day{border:1px solid var(--line);border-radius:8px;padding:8px;min-height:78px;display:flex;flex-direction:column;gap:6px;cursor:pointer;background:var(--surface);text-align:left}
+.day:hover{border-color:var(--muted)}
+.day.out{opacity:.35}
+.day.sel{outline:2px solid var(--accent);outline-offset:-1px}
+.day.hoje .dn{background:var(--accent);color:var(--accent-ink);border-radius:6px;padding:0 6px}
+.day .dn{font-weight:700;align-self:flex-start}
+.day .cnt{font-size:.78rem;font-weight:600}
+.day.lotado{background:var(--crit-soft)}
+.strip{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+.chip{flex:none;border:1px solid var(--line);border-radius:8px;padding:6px 9px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;background:var(--surface);min-width:62px}
+.chip .w{font-size:.7rem;text-transform:uppercase;color:var(--muted);font-weight:600}
+.chip .d{font-weight:700;font-size:.9rem}
+.chip .c{font-size:.72rem;font-weight:600}
+.chip.sel{border-color:var(--accent);background:var(--accent-soft)}
+.alert{padding:10px 12px;border-radius:8px;font-size:.9rem;font-weight:500}
+.a-crit{background:var(--crit-soft);color:var(--crit)} .a-warn{background:var(--warn-soft);color:var(--warn)} .a-info{background:var(--info-soft);color:var(--info)}
+/* Itens da OS */
+.items{display:flex;flex-direction:column;gap:8px}
+.it{display:grid;grid-template-columns:1.3fr 1.5fr 1.2fr 64px 100px 96px 32px;gap:8px;align-items:center}
+.it-h{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.it .sub{text-align:right}
+.x{border:none;background:none;cursor:pointer;color:var(--muted);font-size:1.2rem;line-height:1;padding:4px}
+.x:hover{color:var(--crit)}
+.totais{display:grid;grid-template-columns:auto auto;gap:6px 24px;justify-content:end;align-items:baseline}
+.totais .k{color:var(--muted);text-align:right}
+.totais .v{text-align:right}
+.totais .big{font-size:1.25rem}
+.flow{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.flow span{font-size:.8rem;padding:4px 10px;border-radius:99px;background:var(--sunk);color:var(--muted);font-weight:600}
+.flow span.on{background:var(--accent);color:var(--accent-ink)}
+.flow span.done{background:var(--accent-soft);color:var(--accent)}
+.bar{height:8px;border-radius:4px;background:var(--sunk);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:4px}
+/* Modal */
+#modal{position:fixed;inset:0;background:rgba(10,12,20,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
+[hidden]{display:none!important}
+.mbox{background:var(--surface);border-radius:12px;width:min(480px,100%);max-height:calc(100% - 32px);overflow:auto;padding:20px;display:flex;flex-direction:column;gap:14px;border:1px solid var(--line)}
+.mbox.wide{width:min(860px,100%)}
+.mact{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-weight:600;z-index:60;max-width:calc(100% - 32px)}
+/* Folha A4 */
+.a4wrap{background:var(--sunk);padding:16px;border-radius:8px;overflow-x:auto}
+.a4{background:#fff;color:#1a1a1a;width:794px;min-height:1000px;margin:0 auto;padding:44px 48px;font-size:12.5px;display:flex;flex-direction:column;gap:16px;box-shadow:0 2px 12px rgba(0,0,0,.15)}
+.a4 h2{font-size:20px;color:#1a1a1a}
+.a4 .top{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid #1a1a1a;padding-bottom:12px}
+.a4 table th{color:#555;border-bottom:1px solid #999}
+.a4 table td{border-bottom:1px solid #ddd}
+.a4 .box{border:1px solid #bbb;border-radius:6px;padding:10px 12px}
+.a4 .ass{margin-top:auto;display:flex;gap:40px;padding-top:40px}
+.a4 .ass div{flex:1;border-top:1px solid #333;text-align:center;padding-top:6px;color:#555}
+@media (max-width:1000px){.g4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:900px){
+  .side{display:none}
+  .bottom{display:flex;position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);z-index:40;padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px));justify-content:space-around}
+  .bottom a{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:.66rem;color:var(--muted);text-decoration:none;font-weight:600;padding:4px 6px;border-radius:8px}
+  .bottom a.on{color:var(--accent)}
+  .bottom svg{width:20px;height:20px}
+  main{padding-bottom:90px}
+  .g2,.s21,.s12{grid-template-columns:minmax(0,1fr)}
+  .it{grid-template-columns:1fr 1fr;padding:10px;border:1px solid var(--line);border-radius:8px;position:relative}
+  .it-h{display:none}
+  .it .x{position:absolute;top:2px;right:2px}
+  .it .sub{grid-column:span 2}
+  .day{min-height:58px;padding:5px}
+  .day .pins{display:none}
+}
+@media (max-width:480px){.g3{grid-template-columns:minmax(0,1fr)} .stat .val{font-size:1.3rem} .panel{padding:14px} h1{font-size:1.45rem}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<div class="proto">Protótipo com dados de exemplo. Nada é salvo: ao recarregar, tudo volta ao início.</div>
+<div class="app">
+  <nav class="side" aria-label="Menu principal">
+    <div class="brand"><b id="brand-nome">Ateliê Jessica</b><span>Gestão do ateliê</span></div>
+    <div class="fita" aria-hidden="true"></div>
+    <div class="nav" id="nav-side"></div>
+  </nav>
+  <main id="main"></main>
+</div>
+<nav class="bottom" id="nav-bottom" aria-label="Menu principal"></nav>
+<div id="modal" hidden></div>
+<div id="toast" hidden></div>
+
+<script>
+(function(){
+"use strict";
+const TODAY = '2026-10-29';
+const MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const DIAS = ['dom','seg','ter','qua','qui','sex','sáb'];
+const DIAS_L = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+
+/* ---------- utilitários ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const brl = c => (c/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const cents2in = c => (c/100).toFixed(2).replace('.',',');
+function parseBRL(s){ s = String(s ?? '').replace(/[^\d,.-]/g,''); if (s.includes(',')) s = s.replace(/\./g,'').replace(',','.'); const v = Math.round(parseFloat(s || '0')*100); return isFinite(v) && v > 0 ? v : 0; }
+const dt = iso => new Date(iso + 'T12:00:00');
+function addDays(iso, n){ const d = dt(iso); d.setDate(d.getDate()+n); return ymd(d); }
+function ymd(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+const fD = iso => iso ? iso.slice(8,10) + '/' + iso.slice(5,7) : '—';
+const fDY = iso => iso ? fD(iso) + '/' + iso.slice(0,4) : '—';
+const fDW = iso => DIAS[dt(iso).getDay()] + ', ' + fD(iso);
+const nOS = n => 'Nº ' + String(n).padStart(4,'0');
+let _id = 1000; const uid = () => 'x' + (_id++);
+
+/* ---------- dados de exemplo ---------- */
+const S = {
+  config:{nome:'Ateliê Jessica', telefone:'(11) 98765-4321', endereco:'Rua das Linhas, 120 — Centro', documento:'', capacidade:6, limite:5,
+    rodape:'Peças não retiradas em até 90 dias após a data de entrega poderão ser doadas. Confira a peça na retirada.'},
+  categorias:[{id:'c1',nome:'Ajustes',ativo:true},{id:'c2',nome:'Consertos',ativo:true},{id:'c3',nome:'Sob medida',ativo:true},{id:'c4',nome:'Customização',ativo:true}],
+  servicos:[
+    {id:'s1',cat:'c1',nome:'Barra de calça',ativo:true},{id:'s2',cat:'c1',nome:'Barra italiana',ativo:true},{id:'s3',cat:'c1',nome:'Ajuste de cintura',ativo:true},
+    {id:'s4',cat:'c1',nome:'Apertar laterais',ativo:true},{id:'s5',cat:'c2',nome:'Troca de zíper',ativo:true},{id:'s6',cat:'c2',nome:'Remendo / cerzido',ativo:true},
+    {id:'s7',cat:'c2',nome:'Pregar botões',ativo:true},{id:'s8',cat:'c3',nome:'Vestido de festa',ativo:true},{id:'s9',cat:'c3',nome:'Saia sob medida',ativo:true},
+    {id:'s10',cat:'c4',nome:'Bordado de nome',ativo:true}],
+  tabelas:[{id:'t1',nome:'Padrão',padrao:true},{id:'t2',nome:'Urgente (até 48h)',padrao:false}],
+  precos:{t1:{s1:2500,s2:3500,s3:4000,s4:4500,s5:3000,s6:2000,s7:1000,s8:68000,s9:22000,s10:1800}},
+  formas:[{id:'f1',nome:'Dinheiro',dinheiro:true,ativo:true},{id:'f2',nome:'Pix',ativo:true},{id:'f3',nome:'Débito',ativo:true},{id:'f4',nome:'Crédito',ativo:true}],
+  catsFin:[{id:'cf1',nome:'Serviços',tipo:'entrada'},{id:'cf2',nome:'Venda de produtos',tipo:'entrada'},{id:'cf3',nome:'Outras entradas',tipo:'entrada'},
+    {id:'cf4',nome:'Material / Aviamentos',tipo:'saida'},{id:'cf5',nome:'Aluguel',tipo:'saida'},{id:'cf6',nome:'Contas (luz, água, internet)',tipo:'saida'},
+    {id:'cf7',nome:'Manutenção',tipo:'saida'},{id:'cf8',nome:'Pró-labore',tipo:'saida'},{id:'cf9',nome:'Impostos',tipo:'saida'},{id:'cf10',nome:'Outras saídas',tipo:'saida'}],
+  clientes:[
+    {id:'k1',nome:'Mariana Souza',tel:'11991234567',obs:'Prefere barra italiana. Avisar por WhatsApp.'},
+    {id:'k2',nome:'Carla Ribeiro',tel:'11987651234',obs:''},
+    {id:'k3',nome:'Ana Paula Lima',tel:'11976543210',obs:'Formatura em 15/11.'},
+    {id:'k4',nome:'Roberto Mendes',tel:'11965432109',obs:'Cliente desde 2022.'},
+    {id:'k5',nome:'Fernanda Costa',tel:'11954321098',obs:''},
+    {id:'k6',nome:'Juliana Alves',tel:'11943210987',obs:'Alergia a níquel: usar botões sem metal.'},
+    {id:'k7',nome:'Patrícia Gomes',tel:'11932109876',obs:''},
+    {id:'k8',nome:'Lucas Martins',tel:'11921098765',obs:''},
+    {id:'k9',nome:'Beatriz Nunes',tel:'11910987654',obs:''},
+    {id:'k10',nome:'Sônia Oliveira',tel:'11998877665',obs:'Escola Santa Clara: uniformes.'}],
+  os:[], lanc:[], caixas:{}, contas:[], seqOS:141
+};
+function seed(){
+S.precos.t2 = Object.fromEntries(Object.entries(S.precos.t1).map(([k,v]) => [k, Math.round(v*1.4/100)*100]));
+
+const ITENS = [
+  [['Calça jeans','s1',2]],
+  [['Vestido azul marinho','s4',1],['Vestido azul marinho','s2',1]],
+  [['Jaqueta de couro','s5',1]],
+  [['Camisa social','s7',1],['Camisa social','s3',1]],
+  [['Vestido de formatura','s8',1]],
+  [['Saia midi','s9',1]],
+  [['Calça social','s2',1],['Calça social','s3',1]],
+  [['Uniforme escolar','s10',3]],
+  [['Blazer','s4',1],['Calça de alfaiataria','s1',1]],
+  [['Calça de moletom','s6',2]]
+];
+// [offset entrega, status, offset entrada, pago: 0 nada | 1 sinal 50% | 2 total]
+const PLANO = [
+  [-3,'entregue',-8,2],[-2,'pronta',-7,1],[-1,'em_producao',-6,1],
+  [0,'pronta',-5,1],[0,'pronta',-4,0],[0,'em_producao',-4,1],[0,'entregue',-6,2],
+  [1,'em_producao',-3,1],[1,'em_producao',-3,0],[1,'aberta',-2,1],[1,'em_producao',-4,1],[1,'aberta',-1,0],[1,'aberta',-1,1],[1,'cancelada',-2,0],
+  [2,'aberta',-1,1],[2,'aberta',-1,0],[2,'em_producao',-2,1],[2,'aberta',0,1],[2,'aberta',0,0],
+  [4,'aberta',-1,1],[4,'aberta',0,0],[4,'aberta',0,1],
+  [5,'aberta',0,1],[5,'aberta',-1,0],[7,'aberta',0,1],[9,'aberta',0,0],[9,'aberta',0,1]
+];
+PLANO.forEach((p,i) => {
+  const [ent, st, entr, pg] = p;
+  const os = {id:uid(), numero:++S.seqOS, cliente:S.clientes[i % S.clientes.length].id, entrada:addDays(TODAY,entr), entrega:addDays(TODAY,ent),
+    tabela:'t1', status:st, desconto: i % 7 === 3 ? 500 : 0, obs: i===4 ? 'Prova marcada para 3 dias antes da entrega.' : '',
+    itens: ITENS[i % ITENS.length].map(([peca,sid,q]) => ({peca, servico:sid, descricao:'', qtd:q, valor:S.precos.t1[sid]}))};
+  if (st === 'cancelada') os.motivo = 'Cliente desistiu do serviço.';
+  S.os.push(os);
+  const total = somaItens(os.itens) - os.desconto;
+  const forma = ['f2','f1','f2','f3','f4'][i % 5];
+  if (pg >= 1) S.lanc.push(mkLanc('entrada', os.entrada, pg===2 ? (st==='entregue' ? Math.round(total/2) : total) : Math.round(total/2), forma, 'cf1', 'Sinal ' + nOS(os.numero), os.id));
+  if (pg === 2 && st === 'entregue') S.lanc.push(mkLanc('entrada', os.entrega, total - Math.round(total/2), 'f1', 'cf1', 'Restante ' + nOS(os.numero), os.id));
+});
+S.lanc.push(mkLanc('saida', addDays(TODAY,-2), 8790, 'f2', 'cf4', 'Linhas, entretelas e zíperes'));
+S.lanc.push(mkLanc('saida', addDays(TODAY,-1), 11990, 'f2', 'cf6', 'Internet + energia'));
+S.lanc.push(mkLanc('saida', TODAY, 4590, 'f1', 'cf4', 'Botões e elásticos (armarinho)'));
+S.lanc.push(mkLanc('entrada', TODAY, 1500, 'f1', 'cf2', 'Venda de kit de costura'));
+// Caixas: dias anteriores fechados, hoje aberto
+[...new Set(S.lanc.map(l => l.data))].filter(d => d < TODAY).sort().forEach(d => {
+  S.caixas[d] = {inicial:10000, aberto:d, fechado:d};
+  S.caixas[d].contado = esperadoDinheiro(d) - (d === addDays(TODAY,-1) ? 500 : 0);
+});
+S.caixas[TODAY] = {inicial:10000, aberto:TODAY};
+S.contas = [
+  {id:uid(), desc:'Fornecedor de tecidos — boleto', cat:'cf4', valor:34000, venc:addDays(TODAY,-2), status:'aberta'},
+  {id:uid(), desc:'Conta de luz', cat:'cf6', valor:18750, venc:addDays(TODAY,5), status:'aberta'},
+  {id:uid(), desc:'Aluguel da sala', cat:'cf5', valor:150000, venc:'2026-11-10', status:'aberta'},
+  {id:uid(), desc:'Manutenção da overloque', cat:'cf7', valor:22000, venc:addDays(TODAY,-6), status:'paga', paga:addDays(TODAY,-6)}
+];
+}
+
+/* ---------- regras ---------- */
+function mkLanc(tipo, data, valor, forma, cat, desc, os, extra){ return Object.assign({id:uid(), tipo, data, valor, forma, cat, desc, os:os||null}, extra||{}); }
+function somaItens(itens){ return itens.reduce((s,i) => s + (i.qtd||0)*(i.valor||0), 0); }
+const sv = l => l.tipo === 'entrada' ? l.valor : -l.valor;
+const pagoOS = id => id ? S.lanc.filter(l => l.os === id).reduce((s,l) => s + sv(l), 0) : 0;
+function totais(o){ const soma = somaItens(o.itens); const total = Math.max(0, soma - (o.desconto||0)); const pago = pagoOS(o.id); return {soma, total, pago, saldo: total - pago}; }
+const cli = id => S.clientes.find(c => c.id === id);
+const serv = id => S.servicos.find(s => s.id === id);
+const forma = id => S.formas.find(f => f.id === id);
+const catFin = id => S.catsFin.find(c => c.id === id);
+function ocupacao(date, ignorarId){ return S.os.filter(o => o.entrega === date && o.status !== 'cancelada' && o.id !== ignorarId).length; }
+function situacao(n){ return n >= S.config.capacidade ? 'lotado' : n >= S.config.limite ? 'quase' : 'livre'; }
+function esperadoDinheiro(d){ const c = S.caixas[d]; return (c ? c.inicial : 0) + S.lanc.filter(l => l.data === d && forma(l.forma)?.dinheiro).reduce((s,l) => s + sv(l), 0); }
+const atrasada = o => o.entrega < TODAY && !['entregue','cancelada'].includes(o.status);
+const ST = {aberta:['Aberta','neutral'], em_producao:['Em produção','info'], pronta:['Pronta','ok'], entregue:['Entregue','muted'], cancelada:['Cancelada','crit']};
+const FLOW = ['aberta','em_producao','pronta','entregue'];
+const pill = st => `<span class="pill p-${ST[st][1]}">${ST[st][0]}</span>`;
+function pins(n){ const cap = S.config.capacidade; let h = ''; for (let i=0;i<cap;i++) h += `<i class="${i<n?'f':''}"></i>`; return `<span class="pins s-${situacao(n)}" aria-hidden="true">${h}</span>`; }
+
+/* ---------- UI: modal, confirmação, toast ---------- */
+let modalActs = [];
+function modal({title, body, actions, wide}){
+  modalActs = actions || [{label:'Fechar'}];
+  $('#modal').innerHTML = `<div class="mbox ${wide?'wide':''}" role="dialog" aria-modal="true" aria-labelledby="m-title"><h2 id="m-title">${title}</h2><div>${body||''}</div>
+    <div class="mact">${modalActs.map((a,i) => `<button class="btn ${a.cls||''}" data-mact="${i}">${a.label}</button>`).join('')}</div></div>`;
+  $('#modal').hidden = false;
+  const f = $('#modal input, #modal select, #modal textarea'); if (f) f.focus();
+}
+function closeModal(){ $('#modal').hidden = true; $('#modal').innerHTML = ''; }
+function confirmar(title, msg, okLabel, onOk, danger){
+  modal({title, body:`<p style="margin:0">${msg}</p>`, actions:[{label:'Voltar'},{label:okLabel, cls: danger ? 'danger' : 'pri', fn:onOk}]});
+}
+let tt; function toast(m){ const t = $('#toast'); t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 2600); }
+$('#modal').addEventListener('click', e => {
+  if (e.target.id === 'modal') return closeModal();
+  const b = e.target.closest('[data-mact]'); if (!b) return;
+  const a = modalActs[+b.dataset.mact];
+  if (a.fn && a.fn() === false) return;
+  const chained = $('#modal').dataset.chain; delete $('#modal').dataset.chain;
+  if (!chained) closeModal();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
+// abre um novo modal a partir de uma ação de modal sem que ele seja fechado em seguida
+function chain(fn){ closeModal(); $('#modal').dataset.chain = '1'; fn(); }
+
+/* ---------- caixa ---------- */
+function requireCaixa(cb){
+  const c = S.caixas[TODAY];
+  if (c && !c.fechado) return cb();
+  if (c && c.fechado) {
+    return modal({title:'O caixa de hoje está fechado', body:'<p style="margin:0">Para lançar algo hoje, reabra o caixa. A reabertura fica registrada.</p>',
+      actions:[{label:'Voltar'},{label:'Reabrir caixa', cls:'pri', fn:() => { c.fechado = null; c.reaberto = new Date().toLocaleTimeString('pt-BR').slice(0,5); chain(cb); render(); }}]});
+  }
+  modal({title:'Abrir o caixa de hoje', body:`<p style="margin:0 0 12px">Nenhum caixa aberto em ${fDY(TODAY)}. Informe o troco inicial em dinheiro para começar.</p>
+    <div class="field"><label for="m-troco">Troco inicial (R$)</label><input class="in num" id="m-troco" inputmode="decimal" value="100,00"></div>`,
+    actions:[{label:'Voltar'},{label:'Abrir caixa', cls:'pri', fn:() => { S.caixas[TODAY] = {inicial: parseBRL($('#m-troco').value), aberto:TODAY}; chain(cb); render(); }}]});
+}
+
+/* ---------- navegação ---------- */
+const ICON = {
+  inicio:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  os:'<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h7"/>',
+  agenda:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  clientes:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.9.8 3.1 2.5 3.5 5.2"/>',
+  financeiro:'<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><circle cx="16.5" cy="14.5" r="1.3"/>',
+  configuracoes:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>'
+};
+const VIEWS = [['inicio','Início'],['os','Ordens de serviço'],['agenda','Agenda'],['clientes','Clientes'],['financeiro','Financeiro'],['configuracoes','Configurações']];
+const SHORT = {inicio:'Início', os:'OS', agenda:'Agenda', clientes:'Clientes', financeiro:'Financeiro', configuracoes:'Ajustes'};
+const svg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
+const ui = {osEdit:null, cliente:null, finTab:'caixa', cfgTab:'atelie', mes:TODAY.slice(0,7), dia:TODAY, agView:'mes', osBusca:'', osStatus:'ativas', cliBusca:'', lancTipo:'', lancPer:'7d', resPer:'mes'};
+const view = () => { const h = location.hash.slice(1); return VIEWS.some(v => v[0] === h) ? h : 'inicio'; };
+function go(v){ if (location.hash.slice(1) === v) render(); else location.hash = v; window.scrollTo(0,0); }
+window.addEventListener('hashchange', () => { if (view() !== 'os') ui.osEdit = null; if (view() !== 'clientes') ui.cliente = null; render(); window.scrollTo(0,0); });
+
+function render(){
+  const v = view();
+  $('#nav-side').innerHTML = VIEWS.map(([k,l]) => `<a href="#${k}" class="${k===v?'on':''}">${svg(k)}${l}</a>`).join('');
+  $('#nav-bottom').innerHTML = VIEWS.map(([k]) => `<a href="#${k}" class="${k===v?'on':''}">${svg(k)}${SHORT[k]}</a>`).join('');
+  $('#brand-nome').textContent = S.config.nome;
+  const R = {inicio:vInicio, os:() => ui.osEdit ? vOSForm() : vOSLista(), agenda:vAgenda, clientes:() => ui.cliente ? vCliente() : vClientes(), financeiro:vFin, configuracoes:vCfg};
+  $('#main').innerHTML = `<div class="wrap">${R[v]()}</div>`;
+  if (v === 'os' && ui.osEdit) { renderItens(); renderStrip(); updTotais(); }
+}
+
+/* ---------- INÍCIO ---------- */
+function osLi(o, extra){
+  const t = totais(o), c = cli(o.cliente);
+  return `<div class="li" data-act="abrir-os" data-id="${o.id}"><div><div class="t">${esc(c.nome)} <span class="muted num" style="font-size:.8rem">${nOS(o.numero)}</span></div>
+    <div class="s">${o.itens.map(i => esc(i.peca)).filter((x,i,a) => a.indexOf(x)===i).join(', ')}${extra?' · '+extra:''}</div></div>
+    <div style="text-align:right">${pill(o.status)}<div class="s num" style="margin-top:3px">${t.saldo>0?'falta '+brl(t.saldo):'pago'}</div></div></div>`;
+}
+function vInicio(){
+  const d = dt(TODAY);
+  const hoje = S.os.filter(o => o.entrega === TODAY && o.status !== 'cancelada');
+  const amanha = S.os.filter(o => o.entrega === addDays(TODAY,1) && o.status !== 'cancelada');
+  const prontas = S.os.filter(o => o.status === 'pronta');
+  const atras = S.os.filter(atrasada);
+  const c = S.caixas[TODAY];
+  const saldoDia = S.lanc.filter(l => l.data === TODAY).reduce((s,l) => s + sv(l), 0);
+  const contas = S.contas.filter(k => k.status === 'aberta' && k.venc <= addDays(TODAY,7)).sort((a,b) => a.venc.localeCompare(b.venc));
+  const receber = S.os.filter(o => o.status !== 'cancelada').reduce((s,o) => s + Math.max(0, totais(o).saldo), 0);
+  const nAm = ocupacao(addDays(TODAY,1));
+  return `<div class="head"><div><h1>${DIAS_L[d.getDay()]}, ${d.getDate()} de ${MESES[d.getMonth()]}</h1><p>Resumo do dia no ateliê</p></div>
+      <button class="btn pri" data-act="nova-os">+ Nova OS</button></div>
+    <div class="grid g4">
+      <div class="panel stat"><span class="lbl">Entregas hoje</span><span class="val num">${hoje.length}<span class="muted" style="font-size:1rem">/${S.config.capacidade}</span></span><span class="sub">${hoje.filter(o=>o.status==='entregue').length} já retiradas</span></div>
+      <div class="panel stat"><span class="lbl">Prontas p/ retirada</span><span class="val num">${prontas.length}</span><span class="sub">aguardando a cliente</span></div>
+      <div class="panel stat"><span class="lbl">Atrasadas</span><span class="val num" style="color:${atras.length?'var(--crit)':'inherit'}">${atras.length}</span><span class="sub">entrega já passou</span></div>
+      <div class="panel stat"><span class="lbl">Caixa de hoje</span><span class="val num">${brl(saldoDia)}</span><span class="sub">${c ? (c.fechado ? 'fechado' : 'aberto') : 'não aberto'} · a receber ${brl(receber)}</span></div>
+    </div>
+    ${nAm >= S.config.capacidade ? `<div class="alert a-crit">Amanhã (${fDW(addDays(TODAY,1))}) está lotado: ${nAm} de ${S.config.capacidade} entregas.</div>` : ''}
+    <div class="grid g2">
+      <div class="panel"><div class="panel-h"><h2>Entregas de hoje</h2><span class="muted">${fDW(TODAY)}</span></div>
+        <div class="list">${hoje.map(o => osLi(o)).join('') || '<div class="empty">Nenhuma entrega hoje.</div>'}</div></div>
+      <div class="panel"><div class="panel-h"><h2>Entregas de amanhã</h2>${pins(nAm)}</div>
+        <div class="list">${amanha.map(o => osLi(o)).join('') || '<div class="empty">Nenhuma entrega amanhã.</div>'}</div></div>
+      <div class="panel"><div class="panel-h"><h2>Atrasadas</h2></div>
+        <div class="list">${atras.map(o => osLi(o, 'era para ' + fD(o.entrega))).join('') || '<div class="empty">Nenhuma OS atrasada.</div>'}</div></div>
+      <div class="panel"><div class="panel-h"><h2>Contas a pagar</h2><button class="btn link" data-act="ir-fin" data-tab="pagar">Ver todas</button></div>
+        <div class="list">${contas.map(k => `<div class="li" data-act="ir-fin" data-tab="pagar"><div><div class="t">${esc(k.desc)}</div><div class="s">vence ${fDW(k.venc)}</div></div>
+          <div style="text-align:right"><div class="num">${brl(k.valor)}</div>${k.venc < TODAY ? '<span class="pill p-crit">Vencida</span>' : '<span class="pill p-warn">Em breve</span>'}</div></div>`).join('') || '<div class="empty">Nada vencendo nos próximos 7 dias.</div>'}</div></div>
+    </div>`;
+}
+
+/* ---------- OS: lista ---------- */
+function vOSLista(){
+  return `<div class="head"><div><h1>Ordens de serviço</h1><p>${S.os.length} OS cadastradas</p></div><button class="btn pri" data-act="nova-os">+ Nova OS</button></div>
+    <div class="panel"><div class="row">
+      <input class="in" id="os-busca" placeholder="Buscar por número ou cliente" value="${esc(ui.osBusca)}" style="flex:1;min-width:200px">
+      <select class="in" id="os-status" style="width:auto">${[['ativas','Em andamento'],['','Todas'],...Object.entries(ST).map(([k,v]) => [k,v[0]])].map(([k,l]) => `<option value="${k}" ${ui.osStatus===k?'selected':''}>${l}</option>`).join('')}</select>
+    </div><div class="tw" id="os-tabela">${osTabela()}</div></div>`;
+}
+function osTabela(){
+  const q = ui.osBusca.trim().toLowerCase().replace(/^n[º°o]?\s*/,'');
+  const rows = S.os.filter(o => {
+    if (ui.osStatus === 'ativas' && ['entregue','cancelada'].includes(o.status)) return false;
+    if (ui.osStatus && ui.osStatus !== 'ativas' && o.status !== ui.osStatus) return false;
+    if (!q) return true;
+    return String(o.numero).includes(q) || cli(o.cliente).nome.toLowerCase().includes(q);
+  }).sort((a,b) => a.entrega.localeCompare(b.entrega) || a.numero - b.numero);
+  if (!rows.length) return '<div class="empty">Nenhuma OS encontrada com esses filtros.</div>';
+  return `<table><thead><tr><th>OS</th><th>Cliente</th><th>Entrega</th><th>Status</th><th class="r">Total</th><th class="r">Falta pagar</th></tr></thead><tbody>
+    ${rows.map(o => { const t = totais(o); return `<tr class="click" data-act="abrir-os" data-id="${o.id}"><td class="num">${nOS(o.numero)}</td><td>${esc(cli(o.cliente).nome)}</td>
+      <td style="${atrasada(o)?'color:var(--crit);font-weight:600':''}">${fDW(o.entrega)}</td><td>${pill(o.status)}</td><td class="r num">${brl(t.total)}</td>
+      <td class="r num" style="${t.saldo>0?'color:var(--warn)':''}">${t.saldo>0?brl(t.saldo):'—'}</td></tr>`; }).join('')}</tbody></table>`;
+}
+
+/* ---------- OS: formulário ---------- */
+function novaOS(clienteId){
+  const tab = S.tabelas.find(t => t.padrao).id;
+  return {id:null, numero:null, cliente:clienteId || '', entrada:TODAY, entrega:addDays(TODAY,3), tabela:tab, status:'aberta', desconto:0, obs:'',
+    itens:[{peca:'', servico:'', descricao:'', qtd:1, valor:0}]};
+}
+function abrirOS(id){ const o = S.os.find(x => x.id === id); ui.osEdit = JSON.parse(JSON.stringify(o)); go('os'); }
+function vOSForm(){
+  const d = ui.osEdit, saved = !!d.id, ro = ['entregue','cancelada'].includes(d.status);
+  const pags = saved ? S.lanc.filter(l => l.os === d.id).sort((a,b) => a.data.localeCompare(b.data)) : [];
+  const idx = FLOW.indexOf(d.status);
+  const next = {aberta:'em_producao', em_producao:'pronta', pronta:'entregue'}[d.status];
+  const servOpts = S.categorias.filter(c => c.ativo).map(c => `<optgroup label="${esc(c.nome)}">${S.servicos.filter(s => s.cat===c.id && s.ativo).map(s => `<option value="${s.id}">${esc(s.nome)}</option>`).join('')}</optgroup>`).join('');
+  ui.servOpts = `<option value="">Item livre</option>` + servOpts;
+  return `<div class="head"><div><button class="btn link" data-act="voltar-os" style="padding-left:0">← Ordens de serviço</button>
+      <h1>${saved ? 'OS ' + nOS(d.numero) : 'Nova ordem de serviço'}</h1><p>${saved ? 'Criada em ' + fDY(d.entrada) : 'O número é gerado ao salvar.'}</p></div>
+      <div class="row"><button class="btn" data-act="imprimir">Imprimir OS</button>${ro ? '' : '<button class="btn pri" data-act="salvar-os">Salvar OS</button>'}</div></div>
+    ${saved ? `<div class="panel"><div class="panel-h"><div class="flow">${d.status==='cancelada' ? '<span class="on" style="background:var(--crit)">Cancelada</span>' :
+        FLOW.map((s,i) => `<span class="${i===idx?'on':i<idx?'done':''}">${ST[s][0]}</span>`).join('<span style="background:none;padding:0">›</span>')}</div>
+      <div class="row">${next ? `<button class="btn pri sm" data-act="status" data-st="${next}">Marcar como ${ST[next][0].toLowerCase()}</button>` : ''}
+        ${idx > 0 && d.status !== 'entregue' ? `<button class="btn sm" data-act="status" data-st="${FLOW[idx-1]}">Voltar etapa</button>` : ''}
+        ${!ro ? '<button class="btn danger sm" data-act="cancelar-os">Cancelar OS</button>' : ''}</div></div>
+      ${d.status==='cancelada' ? `<div class="alert a-crit">Motivo: ${esc(d.motivo)}</div>` : ''}</div>` : ''}
+    <div class="panel"><h2>Cabeçalho</h2>
+      <div class="grid g2">
+        <div class="field"><label for="f-cli">Cliente</label><div class="row" style="flex-wrap:nowrap">
+          <select class="in" id="f-cli" ${ro?'disabled':''}><option value="">Selecione a cliente…</option>${S.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(c => `<option value="${c.id}" ${c.id===d.cliente?'selected':''}>${esc(c.nome)}</option>`).join('')}</select>
+          ${ro ? '' : '<button class="btn sm" data-act="cli-rapido" title="Cadastrar cliente nova">+ Nova</button>'}</div>
+          <div id="cli-info" class="muted" style="font-size:.85rem">${cliInfo(d.cliente)}</div></div>
+        <div class="grid g2" style="gap:10px">
+          <div class="field"><label for="f-entrada">Entrada</label><input type="date" class="in" id="f-entrada" value="${d.entrada}" ${ro?'disabled':''}></div>
+          <div class="field"><label for="f-tab">Tabela de preço</label><select class="in" id="f-tab" ${ro?'disabled':''}>${S.tabelas.map(t => `<option value="${t.id}" ${t.id===d.tabela?'selected':''}>${esc(t.nome)}</option>`).join('')}</select></div>
+        </div>
+      </div>
+      <div class="field"><label for="f-entrega">Data de entrega</label><div class="row"><input type="date" class="in" id="f-entrega" value="${d.entrega}" style="width:auto" ${ro?'disabled':''}>
+        <span class="muted" style="font-size:.85rem">Ocupação dos próximos dias (máx. ${S.config.capacidade} por dia):</span></div>
+        <div class="strip" id="strip"></div><div id="entrega-aviso"></div></div>
+    </div>
+    <div class="panel"><div class="panel-h"><h2>Peças e serviços</h2>${ro ? '' : '<button class="btn sm" data-act="add-item">+ Adicionar item</button>'}</div>
+      <div class="items" id="itens"></div>
+      <div class="grid g2" style="align-items:start">
+        <div class="field"><label for="f-obs">Observações</label><textarea class="in" id="f-obs" ${ro?'disabled':''} placeholder="Ex.: prova marcada, tecido da cliente, cuidados com a peça">${esc(d.obs)}</textarea></div>
+        <div class="totais">
+          <span class="k">Soma dos itens</span><span class="v num" id="t-soma"></span>
+          <label class="k" for="f-desc">Desconto</label><input class="in num v" id="f-desc" inputmode="decimal" value="${cents2in(d.desconto)}" style="width:110px;justify-self:end;text-align:right" ${ro?'disabled':''}>
+          <span class="k"><b>Total</b></span><span class="v num big" id="t-total"></span>
+          <span class="k">Pago</span><span class="v num" id="t-pago" style="color:var(--ok)"></span>
+          <span class="k"><b>Falta pagar</b></span><span class="v num big" id="t-saldo"></span>
+        </div>
+      </div>
+    </div>
+    <div class="panel"><div class="panel-h"><h2>Pagamentos</h2>${d.status==='cancelada' ? '' : '<button class="btn pri sm" data-act="pagar-os">Registrar pagamento</button>'}</div>
+      ${pags.length ? `<div class="tw"><table><thead><tr><th>Data</th><th>Descrição</th><th>Forma</th><th class="r">Valor</th><th></th></tr></thead><tbody>
+        ${pags.map(l => `<tr><td>${fDY(l.data)}</td><td>${esc(l.desc)}</td><td>${esc(forma(l.forma).nome)}</td><td class="r num" style="color:${l.tipo==='entrada'?'var(--ok)':'var(--crit)'}">${l.tipo==='entrada'?'':'− '}${brl(l.valor)}</td>
+          <td class="r">${!l.estornoDe && !l.estornadoPor ? `<button class="btn sm" data-act="estornar" data-id="${l.id}">Estornar</button>` : l.estornadoPor ? '<span class="pill p-muted">Estornado</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`
+        : `<div class="empty">${saved ? 'Nenhum pagamento registrado.' : 'Ao registrar um pagamento, a OS é salva automaticamente.'}</div>`}
+    </div>`;
+}
+function cliInfo(id){ const c = cli(id); if (!c) return ''; return `${fmtTel(c.tel)}${c.obs ? ' · ' + esc(c.obs) : ''}`; }
+function fmtTel(t){ t = String(t||''); return t.length === 11 ? `(${t.slice(0,2)}) ${t.slice(2,7)}-${t.slice(7)}` : t.length === 10 ? `(${t.slice(0,2)}) ${t.slice(2,6)}-${t.slice(6)}` : t; }
+function renderItens(){
+  const d = ui.osEdit, ro = ['entregue','cancelada'].includes(d.status), dis = ro ? 'disabled' : '';
+  $('#itens').innerHTML = `<div class="it it-h"><span>Peça</span><span>Serviço</span><span>Descrição</span><span>Qtd</span><span>Valor un.</span><span style="text-align:right">Subtotal</span><span></span></div>` +
+    d.itens.map((it,i) => `<div class="it" data-i="${i}">
+      <input class="in" data-f="peca" placeholder="Ex.: Vestido azul" value="${esc(it.peca)}" aria-label="Peça" ${dis}>
+      <select class="in" data-f="servico" aria-label="Serviço" ${dis}>${ui.servOpts.replace(`value="${it.servico}"`, `value="${it.servico}" selected`)}</select>
+      <input class="in" data-f="descricao" placeholder="Detalhes (opcional)" value="${esc(it.descricao)}" aria-label="Descrição" ${dis}>
+      <input class="in num" data-f="qtd" type="number" min="1" value="${it.qtd}" aria-label="Quantidade" ${dis}>
+      <input class="in num" data-f="valor" inputmode="decimal" value="${cents2in(it.valor)}" aria-label="Valor unitário" ${dis}>
+      <span class="sub num" id="sub-${i}"></span>
+      ${ro || d.itens.length === 1 ? '<span></span>' : `<button class="x" data-act="rm-item" data-i="${i}" title="Remover item" aria-label="Remover item">×</button>`}
+    </div>`).join('');
+}
+function renderStrip(){
+  const d = ui.osEdit; let h = '';
+  for (let k=0;k<14;k++){ const day = addDays(TODAY,k); const n = ocupacao(day, d.id);
+    h += `<button class="chip ${day===d.entrega?'sel':''}" data-act="set-entrega" data-d="${day}" ${['entregue','cancelada'].includes(d.status)?'disabled':''}><span class="w">${DIAS[dt(day).getDay()]}</span><span class="d">${fD(day)}</span>${pins(n)}<span class="c s-${situacao(n)}">${n}/${S.config.capacidade}</span></button>`; }
+  $('#strip').innerHTML = h;
+  const n = ocupacao(d.entrega, d.id);
+  $('#entrega-aviso').innerHTML = d.entrega < d.entrada ? '<div class="alert a-crit">A entrega não pode ser antes da entrada.</div>'
+    : situacao(n) === 'lotado' ? `<div class="alert a-crit">${fDW(d.entrega)} já tem ${n} de ${S.config.capacidade} entregas. Você ainda pode encaixar esta OS, com confirmação.</div>`
+    : situacao(n) === 'quase' ? `<div class="alert a-warn">${fDW(d.entrega)} está quase cheio: ${n} de ${S.config.capacidade}.</div>` : '';
+}
+function updTotais(){
+  const d = ui.osEdit, t = totais(d);
+  d.itens.forEach((it,i) => { const el = $('#sub-'+i); if (el) el.textContent = brl(it.qtd*it.valor); });
+  $('#t-soma').textContent = brl(t.soma); $('#t-total').textContent = brl(t.total); $('#t-pago').textContent = brl(t.pago);
+  $('#t-saldo').textContent = brl(Math.max(0,t.saldo)); $('#t-saldo').style.color = t.saldo > 0 ? 'var(--warn)' : 'var(--ok)';
+}
+function salvarOS(force, after){
+  const d = ui.osEdit;
+  d.itens = d.itens.filter((it,i) => it.peca.trim() || it.servico || it.valor || d.itens.length === 1);
+  if (!d.cliente) return toast('Escolha a cliente antes de salvar.');
+  if (!d.entrega) return toast('Informe a data de entrega.');
+  if (d.entrega < d.entrada) return toast('A entrega não pode ser antes da entrada.');
+  if (!d.itens.some(it => it.peca.trim() || it.servico)) return toast('Adicione pelo menos uma peça ou serviço.');
+  if (d.desconto > somaItens(d.itens)) return toast('O desconto é maior que a soma dos itens.');
+  const n = ocupacao(d.entrega, d.id);
+  const orig = d.id && S.os.find(o => o.id === d.id);
+  if (!force && n >= S.config.capacidade && (!orig || orig.entrega !== d.entrega))
+    return confirmar('Dia lotado', `${fDW(d.entrega)} já tem ${n} de ${S.config.capacidade} entregas. Encaixar esta OS mesmo assim?`, 'Encaixar mesmo assim', () => chain(() => salvarOS(true, after)));
+  if (!d.id) { d.id = uid(); d.numero = ++S.seqOS; S.os.push(JSON.parse(JSON.stringify(d))); toast('OS ' + nOS(d.numero) + ' criada.'); }
+  else { Object.assign(orig, JSON.parse(JSON.stringify(d))); if (!after) toast('OS salva.'); }
+  if (after) after(); else closeModal();
+  render();
+}
+function setStatus(st){
+  const d = ui.osEdit, o = S.os.find(x => x.id === d.id), t = totais(d);
+  const apply = () => { d.status = o.status = st; if (st==='entregue') o.entregueEm = TODAY; render(); toast('Status: ' + ST[st][0] + '.'); };
+  if (st === 'entregue' && t.saldo > 0) return confirmar('Entregar com saldo pendente?', `Ainda faltam <b>${brl(t.saldo)}</b>. A OS continua em "A receber" até ser paga.`, 'Entregar mesmo assim', apply);
+  apply();
+}
+function pagarOS(){
+  const go2 = () => requireCaixa(() => {
+    const d = ui.osEdit, t = totais(d);
+    modal({title:'Registrar pagamento · ' + nOS(d.numero), body:`<div class="grid" style="gap:12px">
+        <p class="muted" style="margin:0">Total ${brl(t.total)} · pago ${brl(t.pago)} · <b>falta ${brl(Math.max(0,t.saldo))}</b></p>
+        <div class="field"><label for="m-val">Valor (R$)</label><input class="in num" id="m-val" inputmode="decimal" value="${cents2in(Math.max(0,t.saldo))}"></div>
+        <div class="field"><label for="m-forma">Forma de pagamento</label><select class="in" id="m-forma">${S.formas.filter(f=>f.ativo).map(f => `<option value="${f.id}">${esc(f.nome)}</option>`).join('')}</select></div>
+        <div class="field"><label for="m-tipo">Tipo</label><select class="in" id="m-tipo"><option>${t.pago>0?'Restante':'Sinal'}</option><option>Pagamento total</option><option>Parcial</option></select></div></div>`,
+      actions:[{label:'Voltar'},{label:'Registrar', cls:'pri', fn:() => {
+        const v = parseBRL($('#m-val').value); if (!v) { toast('Informe um valor maior que zero.'); return false; }
+        S.lanc.push(mkLanc('entrada', TODAY, v, $('#m-forma').value, 'cf1', $('#m-tipo').value + ' ' + nOS(d.numero), d.id));
+        toast(brl(v) + ' registrado no caixa de hoje.'); render(); }}]});
+  });
+  if (!ui.osEdit.id) salvarOS(false, go2); else go2();
+}
+function estornar(id){
+  const l = S.lanc.find(x => x.id === id);
+  if (l.estornoDe) return toast('Um estorno não pode ser estornado.');
+  if (l.estornadoPor) return toast('Este lançamento já foi estornado.');
+  confirmar('Estornar lançamento?', `Será criado um lançamento de correção de <b>${brl(l.valor)}</b> no caixa de hoje. O original continua no histórico.`, 'Estornar', () => chain(() => requireCaixa(() => {
+    const e = mkLanc(l.tipo === 'entrada' ? 'saida' : 'entrada', TODAY, l.valor, l.forma, l.cat, 'Estorno: ' + l.desc, l.os, {estornoDe:l.id});
+    S.lanc.push(e); l.estornadoPor = e.id; closeModal(); toast('Lançamento estornado.'); render();
+  })), true);
+}
+function cancelarOS(){
+  const d = ui.osEdit, p = pagoOS(d.id);
+  if (p > 0) return modal({title:'Não é possível cancelar ainda', body:`<p style="margin:0">Esta OS tem <b>${brl(p)}</b> em pagamentos. Estorne os pagamentos (na lista abaixo) antes de cancelar, para o caixa ficar correto.</p>`});
+  modal({title:'Cancelar ' + nOS(d.numero), body:`<div class="field"><label for="m-mot">Motivo do cancelamento</label><textarea class="in" id="m-mot" placeholder="Ex.: cliente desistiu"></textarea></div>`,
+    actions:[{label:'Voltar'},{label:'Cancelar OS', cls:'danger', fn:() => { const m = $('#m-mot').value.trim(); if (!m) { toast('Informe o motivo.'); return false; }
+      const o = S.os.find(x => x.id === d.id); o.status = d.status = 'cancelada'; o.motivo = d.motivo = m; toast('OS cancelada.'); render(); }}]});
+}
+function imprimir(){
+  const d = ui.osEdit, t = totais(d), c = cli(d.cliente), cf = S.config;
+  const pags = d.id ? S.lanc.filter(l => l.os === d.id) : [];
+  modal({wide:true, title:'Visualização de impressão', body:`<p class="muted" style="margin:0 0 12px">No sistema real, este botão abre a impressão do navegador (folha A4 ou PDF). Aqui no protótipo, você vê como a folha fica.</p>
+   <div class="a4wrap"><div class="a4">
+    <div class="top"><div><h2>${esc(cf.nome)}</h2><div>${esc(cf.endereco)}</div><div>${esc(cf.telefone)}${cf.documento ? ' · ' + esc(cf.documento) : ''}</div></div>
+      <div style="text-align:right"><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.08em">Ordem de serviço</div><div style="font-size:22px;font-weight:700" class="num">${d.numero ? nOS(d.numero) : 'Rascunho'}</div>
+      <div>Entrada: <b>${fDY(d.entrada)}</b></div><div>Entrega: <b>${fDY(d.entrega)}</b></div></div></div>
+    <div class="box"><b>Cliente:</b> ${c ? esc(c.nome) : '—'} &nbsp;·&nbsp; <b>Telefone:</b> ${c ? fmtTel(c.tel) : '—'}</div>
+    <table><thead><tr><th>Peça</th><th>Serviço</th><th>Descrição</th><th class="r">Qtd</th><th class="r">Valor un.</th><th class="r">Subtotal</th></tr></thead><tbody>
+      ${d.itens.map(it => `<tr><td>${esc(it.peca)}</td><td>${esc(serv(it.servico)?.nome || 'Item livre')}</td><td>${esc(it.descricao)}</td><td class="r">${it.qtd}</td><td class="r num">${brl(it.valor)}</td><td class="r num">${brl(it.qtd*it.valor)}</td></tr>`).join('')}</tbody></table>
+    <div style="display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">${pags.length ? '<b>Pagamentos</b><br>' + pags.map(l => `${fD(l.data)} · ${esc(forma(l.forma).nome)} · ${l.tipo==='entrada'?'':'− '}${brl(l.valor)}`).join('<br>') : ''}
+        ${d.obs ? `<div style="margin-top:10px"><b>Observações</b><br>${esc(d.obs)}</div>` : ''}</div>
+      <div class="totais" style="min-width:220px"><span class="k">Soma</span><span class="v num">${brl(t.soma)}</span><span class="k">Desconto</span><span class="v num">${brl(d.desconto)}</span>
+        <span class="k"><b>Total</b></span><span class="v num"><b>${brl(t.total)}</b></span><span class="k">Pago</span><span class="v num">${brl(t.pago)}</span>
+        <span class="k"><b>Falta pagar</b></span><span class="v num"><b>${brl(Math.max(0,t.saldo))}</b></span></div></div>
+    <div style="font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:8px">${esc(cf.rodape)}</div>
+    <div class="ass"><div>Assinatura da cliente</div><div>${esc(cf.nome)}</div></div>
+   </div></div>`});
+}
+function cliRapido(cb){
+  modal({title:'Cadastrar cliente', body:`<div class="grid" style="gap:12px"><div class="field"><label for="m-nome">Nome</label><input class="in" id="m-nome"></div>
+    <div class="field"><label for="m-tel">Telefone (WhatsApp)</label><input class="in" id="m-tel" inputmode="tel" placeholder="(11) 90000-0000"></div>
+    <div class="field"><label for="m-obs">Observações</label><textarea class="in" id="m-obs"></textarea></div></div>`,
+    actions:[{label:'Voltar'},{label:'Cadastrar', cls:'pri', fn:() => { const n = $('#m-nome').value.trim(); if (!n) { toast('Informe o nome.'); return false; }
+      const c = {id:uid(), nome:n, tel:$('#m-tel').value.replace(/\D/g,''), obs:$('#m-obs').value.trim()}; S.clientes.push(c); toast('Cliente cadastrada.'); cb(c); }}]});
+}
+
+/* ---------- AGENDA ---------- */
+function vAgenda(){
+  const [y,m] = ui.mes.split('-').map(Number);
+  const first = new Date(y, m-1, 1, 12), start = addDays(ymd(first), -first.getDay());
+  let cells = '';
+  for (let i=0;i<42;i++){ const d = addDays(start,i); const n = ocupacao(d); const s = situacao(n);
+    cells += `<button class="day ${d.slice(0,7)!==ui.mes?'out':''} ${d===TODAY?'hoje':''} ${d===ui.dia?'sel':''} ${n&&s==='lotado'?'lotado':''}" data-act="dia" data-d="${d}">
+      <span class="dn">${+d.slice(8)}</span>${n ? `${pins(n)}<span class="cnt s-${s}">${n}/${S.config.capacidade}${n>S.config.capacidade?' · encaixe':''}</span>` : ''}</button>`; }
+  const doDia = S.os.filter(o => o.entrega === ui.dia && o.status !== 'cancelada');
+  const nd = doDia.length;
+  let semana = '';
+  if (ui.agView === 'semana') {
+    const ini = addDays(ui.dia, -dt(ui.dia).getDay());
+    for (let i=0;i<7;i++){ const d = addDays(ini,i); const l = S.os.filter(o => o.entrega === d && o.status !== 'cancelada'); const n = l.length;
+      semana += `<div class="panel" style="padding:14px"><div class="panel-h"><h3>${DIAS_L[dt(d).getDay()]}, ${fD(d)}</h3><span class="row">${pins(n)}<span class="num s-${situacao(n)}" style="font-weight:600">${n}/${S.config.capacidade}</span></span></div>
+        <div class="list">${l.map(o => osLi(o)).join('') || '<div class="empty">Dia livre.</div>'}</div></div>`; }
+  }
+  return `<div class="head"><div><h1>Agenda de produção</h1><p>Capacidade de ${S.config.capacidade} entregas por dia. Amarelo a partir de ${S.config.limite}, vermelho quando lota.</p></div>
+      <div class="tabs" style="border:none"><button class="${ui.agView==='mes'?'on':''}" data-act="agview" data-v="mes">Mês</button><button class="${ui.agView==='semana'?'on':''}" data-act="agview" data-v="semana">Semana</button></div></div>
+    ${ui.agView === 'mes' ? `<div class="grid s21">
+      <div class="panel"><div class="panel-h"><button class="btn sm" data-act="mes" data-n="-1" aria-label="Mês anterior">‹</button><h2 style="text-transform:capitalize">${MESES[m-1]} ${y}</h2><button class="btn sm" data-act="mes" data-n="1" aria-label="Próximo mês">›</button></div>
+        <div class="cal">${DIAS.map(d => `<span class="dow">${d}</span>`).join('')}${cells}</div>
+        <div class="row muted" style="font-size:.82rem;gap:16px"><span class="row" style="gap:6px"><span class="pins s-livre"><i class="f"></i></span>livre</span><span class="row" style="gap:6px"><span class="pins s-quase"><i class="f"></i></span>quase cheio</span><span class="row" style="gap:6px"><span class="pins s-lotado"><i class="f"></i></span>lotado</span></div></div>
+      <div class="panel"><div class="panel-h"><h2>${DIAS_L[dt(ui.dia).getDay()]}, ${fD(ui.dia)}</h2><span class="pill p-${{livre:'ok',quase:'warn',lotado:'crit'}[situacao(nd)]}">${nd}/${S.config.capacidade}</span></div>
+        <div class="list">${doDia.map(o => osLi(o)).join('') || '<div class="empty">Nenhuma entrega neste dia.</div>'}</div>
+        <button class="btn pri" data-act="nova-os-dia" data-d="${ui.dia}" ${ui.dia < TODAY ? 'disabled' : ''}>+ Nova OS para ${fD(ui.dia)}</button></div>
+    </div>` : `<div class="panel-h"><button class="btn sm" data-act="semana" data-n="-7">‹ Semana anterior</button><button class="btn sm" data-act="semana" data-n="7">Próxima semana ›</button></div><div class="grid g2">${semana}</div>`}`;
+}
+
+/* ---------- CLIENTES ---------- */
+function vClientes(){
+  return `<div class="head"><div><h1>Clientes</h1><p>${S.clientes.length} cadastradas</p></div><button class="btn pri" data-act="nova-cli">+ Nova cliente</button></div>
+    <div class="panel"><input class="in" id="cli-busca" placeholder="Buscar por nome ou telefone" value="${esc(ui.cliBusca)}"><div class="tw" id="cli-tabela">${cliTabela()}</div></div>`;
+}
+function cliTabela(){
+  const q = ui.cliBusca.trim().toLowerCase(), qd = q.replace(/\D/g,'');
+  const rows = S.clientes.filter(c => !q || c.nome.toLowerCase().includes(q) || (qd && c.tel.includes(qd))).sort((a,b) => a.nome.localeCompare(b.nome));
+  if (!rows.length) return '<div class="empty">Nenhuma cliente encontrada.</div>';
+  return `<table><thead><tr><th>Nome</th><th>Telefone</th><th class="r">OS</th><th class="r">Em aberto</th></tr></thead><tbody>${rows.map(c => {
+    const os = S.os.filter(o => o.cliente === c.id && o.status !== 'cancelada'); const ab = os.reduce((s,o) => s + Math.max(0, totais(o).saldo), 0);
+    return `<tr class="click" data-act="abrir-cli" data-id="${c.id}"><td><b>${esc(c.nome)}</b>${c.obs ? `<div class="muted" style="font-size:.82rem">${esc(c.obs)}</div>` : ''}</td><td class="num">${fmtTel(c.tel)}</td><td class="r num">${os.length}</td><td class="r num" style="${ab?'color:var(--warn)':''}">${ab?brl(ab):'—'}</td></tr>`; }).join('')}</tbody></table>`;
+}
+function vCliente(){
+  const c = cli(ui.cliente), os = S.os.filter(o => o.cliente === c.id).sort((a,b) => b.entrada.localeCompare(a.entrada));
+  const ativos = os.filter(o => o.status !== 'cancelada');
+  const gasto = ativos.reduce((s,o) => s + totais(o).pago, 0), ab = ativos.reduce((s,o) => s + Math.max(0, totais(o).saldo), 0);
+  return `<div class="head"><div><button class="btn link" data-act="voltar-cli" style="padding-left:0">← Clientes</button><h1>${esc(c.nome)}</h1>
+      <p>${fmtTel(c.tel)} · <a href="https://wa.me/55${c.tel}" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600">Abrir no WhatsApp</a></p></div>
+      <div class="row"><button class="btn" data-act="editar-cli">Editar</button><button class="btn pri" data-act="nova-os-cli">+ Nova OS</button></div></div>
+    <div class="grid g4"><div class="panel stat"><span class="lbl">Ordens de serviço</span><span class="val num">${ativos.length}</span></div>
+      <div class="panel stat"><span class="lbl">Total já pago</span><span class="val num">${brl(gasto)}</span></div>
+      <div class="panel stat"><span class="lbl">Em aberto</span><span class="val num" style="${ab?'color:var(--warn)':''}">${brl(ab)}</span></div>
+      <div class="panel stat"><span class="lbl">Cliente desde</span><span class="val num">${os.length ? fD(os[os.length-1].entrada) : '—'}</span></div></div>
+    ${c.obs ? `<div class="alert a-info"><b>Observações:</b> ${esc(c.obs)}</div>` : ''}
+    <div class="panel"><h2>Histórico de OS</h2><div class="tw">${os.length ? `<table><thead><tr><th>OS</th><th>Entrada</th><th>Entrega</th><th>Peças</th><th>Status</th><th class="r">Total</th><th class="r">Falta</th></tr></thead><tbody>
+      ${os.map(o => { const t = totais(o); return `<tr class="click" data-act="abrir-os" data-id="${o.id}"><td class="num">${nOS(o.numero)}</td><td>${fD(o.entrada)}</td><td>${fD(o.entrega)}</td><td>${o.itens.map(i=>esc(i.peca)).filter((x,i,a)=>a.indexOf(x)===i).join(', ')}</td><td>${pill(o.status)}</td><td class="r num">${brl(t.total)}</td><td class="r num">${t.saldo>0&&o.status!=='cancelada'?brl(t.saldo):'—'}</td></tr>`; }).join('')}</tbody></table>` : '<div class="empty">Esta cliente ainda não tem OS.</div>'}</div></div>`;
+}
+
+/* ---------- FINANCEIRO ---------- */
+const FT = [['caixa','Caixa do dia'],['lanc','Lançamentos'],['receber','A receber'],['pagar','A pagar'],['resumo','Resumo']];
+function vFin(){
+  const R = {caixa:finCaixa, lanc:finLanc, receber:finReceber, pagar:finPagar, resumo:finResumo};
+  return `<div class="head"><div><h1>Financeiro</h1><p>Entradas, saídas, caixa e contas do ateliê</p></div>
+      <div class="row"><button class="btn" data-act="novo-lanc" data-tipo="saida">− Nova saída</button><button class="btn pri" data-act="novo-lanc" data-tipo="entrada">+ Nova entrada</button></div></div>
+    <div class="tabs">${FT.map(([k,l]) => `<button class="${ui.finTab===k?'on':''}" data-act="fin-tab" data-tab="${k}">${l}</button>`).join('')}</div>${R[ui.finTab]()}`;
+}
+function lancTable(rows, showDate){
+  if (!rows.length) return '<div class="empty">Nenhum lançamento.</div>';
+  return `<div class="tw"><table><thead><tr>${showDate?'<th>Data</th>':''}<th>Descrição</th><th>Categoria</th><th>Forma</th><th class="r">Valor</th><th></th></tr></thead><tbody>
+    ${rows.map(l => `<tr>${showDate?`<td>${fD(l.data)}</td>`:''}<td>${esc(l.desc)}${l.os ? ` <button class="btn link sm" data-act="abrir-os" data-id="${l.os}">ver OS</button>` : ''}</td><td class="muted">${esc(catFin(l.cat).nome)}</td><td>${esc(forma(l.forma).nome)}</td>
+      <td class="r num" style="color:${l.tipo==='entrada'?'var(--ok)':'var(--crit)'};white-space:nowrap">${l.tipo==='entrada'?'+ ':'− '}${brl(l.valor)}</td>
+      <td class="r">${l.estornadoPor ? '<span class="pill p-muted">Estornado</span>' : l.estornoDe ? '<span class="pill p-warn">Estorno</span>' : `<button class="btn sm" data-act="estornar" data-id="${l.id}">Estornar</button>`}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function finCaixa(){
+  const c = S.caixas[TODAY], ls = S.lanc.filter(l => l.data === TODAY);
+  if (!c) return `<div class="panel" style="align-items:flex-start"><h2>Caixa de ${fDY(TODAY)} não foi aberto</h2><p class="muted" style="margin:0">Abra o caixa informando o troco inicial em dinheiro.</p><button class="btn pri" data-act="abrir-caixa">Abrir caixa</button></div>`;
+  const porForma = S.formas.map(f => { const e = ls.filter(l => l.forma===f.id && l.tipo==='entrada').reduce((s,l)=>s+l.valor,0), sa = ls.filter(l => l.forma===f.id && l.tipo==='saida').reduce((s,l)=>s+l.valor,0); return {f,e,sa}; }).filter(x => x.e || x.sa || x.f.dinheiro);
+  const ent = ls.filter(l=>l.tipo==='entrada').reduce((s,l)=>s+l.valor,0), sai = ls.filter(l=>l.tipo==='saida').reduce((s,l)=>s+l.valor,0);
+  const esp = esperadoDinheiro(TODAY);
+  const dif = c.fechado ? c.contado - esp : null;
+  const ontem = Object.keys(S.caixas).filter(d => d < TODAY).sort().pop();
+  const co = ontem && S.caixas[ontem], difOntem = co ? co.contado - esperadoDinheiro(ontem) : 0;
+  return `<div class="grid g4">
+      <div class="panel stat"><span class="lbl">Troco inicial</span><span class="val num">${brl(c.inicial)}</span><span class="sub">${c.reaberto ? 'reaberto às ' + c.reaberto : 'caixa aberto hoje'}</span></div>
+      <div class="panel stat"><span class="lbl">Entradas</span><span class="val num" style="color:var(--ok)">${brl(ent)}</span><span class="sub">${ls.filter(l=>l.tipo==='entrada').length} lançamentos</span></div>
+      <div class="panel stat"><span class="lbl">Saídas</span><span class="val num" style="color:var(--crit)">${brl(sai)}</span><span class="sub">${ls.filter(l=>l.tipo==='saida').length} lançamentos</span></div>
+      <div class="panel stat"><span class="lbl">Dinheiro na gaveta</span><span class="val num">${brl(esp)}</span><span class="sub">esperado agora</span></div></div>
+    ${co && difOntem ? `<div class="alert a-warn">Fechamento de ${fD(ontem)}: diferença de ${brl(difOntem)} (${difOntem<0?'faltou':'sobrou'} dinheiro na gaveta).</div>` : ''}
+    <div class="grid s12">
+      <div class="panel"><div class="panel-h"><h2>Por forma de pagamento</h2></div>
+        <table><thead><tr><th>Forma</th><th class="r">Entradas</th><th class="r">Saídas</th></tr></thead><tbody>${porForma.map(x => `<tr><td>${esc(x.f.nome)}</td><td class="r num">${brl(x.e)}</td><td class="r num">${brl(x.sa)}</td></tr>`).join('')}</tbody></table>
+        ${c.fechado ? `<div class="alert ${dif===0?'a-info':'a-warn'}">Caixa fechado. Contado ${brl(c.contado)}, esperado ${brl(esp)}. ${dif===0?'Sem diferença.':'Diferença de '+brl(dif)+'.'}</div>
+          <button class="btn" data-act="reabrir-caixa">Reabrir caixa</button>` : `<button class="btn pri" data-act="fechar-caixa">Fechar caixa</button>`}</div>
+      <div class="panel"><div class="panel-h"><h2>Lançamentos de hoje</h2></div>${lancTable(ls.slice().reverse(), false)}</div></div>`;
+}
+function inPer(d, per){ if (per==='tudo') return true; if (per==='hoje') return d===TODAY; if (per==='7d') return d > addDays(TODAY,-7) && d <= TODAY; if (per==='mes') return d.slice(0,7)===TODAY.slice(0,7); }
+const PER = [['hoje','Hoje'],['7d','Últimos 7 dias'],['mes','Este mês'],['tudo','Tudo']];
+function finLanc(){
+  const rows = S.lanc.filter(l => inPer(l.data, ui.lancPer) && (!ui.lancTipo || l.tipo === ui.lancTipo)).sort((a,b) => b.data.localeCompare(a.data));
+  return `<div class="panel"><div class="row"><select class="in" id="lanc-per" style="width:auto">${PER.map(([k,l]) => `<option value="${k}" ${ui.lancPer===k?'selected':''}>${l}</option>`).join('')}</select>
+    <select class="in" id="lanc-tipo" style="width:auto"><option value="">Entradas e saídas</option><option value="entrada" ${ui.lancTipo==='entrada'?'selected':''}>Só entradas</option><option value="saida" ${ui.lancTipo==='saida'?'selected':''}>Só saídas</option></select>
+    <span class="muted" style="font-size:.85rem">Lançamentos não são apagados. Para corrigir, use Estornar.</span></div>${lancTable(rows, true)}</div>`;
+}
+function finReceber(){
+  const rows = S.os.filter(o => o.status !== 'cancelada' && totais(o).saldo > 0).sort((a,b) => (b.status==='pronta') - (a.status==='pronta') || a.entrega.localeCompare(b.entrega));
+  const tot = rows.reduce((s,o) => s + totais(o).saldo, 0);
+  return `<div class="panel"><div class="panel-h"><h2>A receber</h2><span class="num" style="font-weight:700;font-size:1.1rem">${brl(tot)}</span></div>
+    <div class="tw"><table><thead><tr><th>OS</th><th>Cliente</th><th>Entrega</th><th>Status</th><th class="r">Total</th><th class="r">Pago</th><th class="r">Falta</th></tr></thead><tbody>
+    ${rows.map(o => { const t = totais(o); return `<tr class="click" data-act="abrir-os" data-id="${o.id}"><td class="num">${nOS(o.numero)}</td><td>${esc(cli(o.cliente).nome)}</td><td>${fDW(o.entrega)}</td>
+      <td>${pill(o.status)}${o.status==='pronta'?' <span class="pill p-warn">Cobrar na retirada</span>':''}</td><td class="r num">${brl(t.total)}</td><td class="r num">${brl(t.pago)}</td><td class="r num" style="color:var(--warn);font-weight:600">${brl(t.saldo)}</td></tr>`; }).join('')}</tbody></table></div></div>`;
+}
+function finPagar(){
+  const rows = S.contas.slice().sort((a,b) => (a.status!=='aberta') - (b.status!=='aberta') || a.venc.localeCompare(b.venc));
+  const ab = S.contas.filter(k => k.status==='aberta').reduce((s,k) => s + k.valor, 0);
+  return `<div class="panel"><div class="panel-h"><h2>Contas a pagar</h2><div class="row"><span class="num" style="font-weight:700">${brl(ab)} em aberto</span><button class="btn pri sm" data-act="nova-conta">+ Nova conta</button></div></div>
+    <div class="tw"><table><thead><tr><th>Vencimento</th><th>Descrição</th><th>Categoria</th><th>Situação</th><th class="r">Valor</th><th></th></tr></thead><tbody>
+    ${rows.map(k => `<tr><td>${fDW(k.venc)}</td><td>${esc(k.desc)}</td><td class="muted">${esc(catFin(k.cat).nome)}</td>
+      <td>${k.status==='paga' ? `<span class="pill p-ok">Paga em ${fD(k.paga)}</span>` : k.status==='cancelada' ? '<span class="pill p-muted">Cancelada</span>' : k.venc < TODAY ? '<span class="pill p-crit">Vencida</span>' : k.venc <= addDays(TODAY,7) ? '<span class="pill p-warn">Vence em breve</span>' : '<span class="pill p-neutral">Em aberto</span>'}</td>
+      <td class="r num">${brl(k.valor)}</td><td class="r">${k.status==='aberta' ? `<button class="btn pri sm" data-act="pagar-conta" data-id="${k.id}">Pagar</button>` : ''}</td></tr>`).join('')}</tbody></table></div></div>`;
+}
+function finResumo(){
+  const ls = S.lanc.filter(l => inPer(l.data, ui.resPer));
+  const ent = ls.filter(l => catFin(l.cat).tipo==='entrada').reduce((s,l) => s + sv(l), 0);
+  const sai = -ls.filter(l => catFin(l.cat).tipo==='saida').reduce((s,l) => s + sv(l), 0);
+  const porCat = tipo => S.catsFin.filter(c => c.tipo===tipo).map(c => ({c, v: Math.abs(ls.filter(l => l.cat===c.id).reduce((s,l) => s + sv(l), 0))})).filter(x => x.v).sort((a,b) => b.v - a.v);
+  const bloco = (tipo, cor) => { const xs = porCat(tipo), max = Math.max(1, ...xs.map(x => x.v));
+    return xs.map(x => `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px"><span>${esc(x.c.nome)}</span><span class="num">${brl(x.v)}</span><div class="bar" style="grid-column:span 2"><i style="width:${x.v/max*100}%;background:${cor}"></i></div></div>`).join('') || '<div class="empty">Nada no período.</div>'; };
+  return `<div class="row"><select class="in" id="res-per" style="width:auto">${PER.map(([k,l]) => `<option value="${k}" ${ui.resPer===k?'selected':''}>${l}</option>`).join('')}</select></div>
+    <div class="grid g3"><div class="panel stat"><span class="lbl">Entradas</span><span class="val num" style="color:var(--ok)">${brl(ent)}</span></div>
+      <div class="panel stat"><span class="lbl">Saídas</span><span class="val num" style="color:var(--crit)">${brl(sai)}</span></div>
+      <div class="panel stat"><span class="lbl">Resultado</span><span class="val num">${brl(ent - sai)}</span></div></div>
+    <div class="grid g2"><div class="panel"><h2>Entradas por categoria</h2>${bloco('entrada','var(--ok)')}</div><div class="panel"><h2>Saídas por categoria</h2>${bloco('saida','var(--crit)')}</div></div>`;
+}
+function novoLanc(tipo){
+  requireCaixa(() => modal({title: tipo==='entrada' ? 'Nova entrada' : 'Nova saída', body:`<div class="grid" style="gap:12px">
+    <div class="field"><label for="m-desc">Descrição</label><input class="in" id="m-desc" placeholder="${tipo==='entrada'?'Ex.: venda de aviamentos':'Ex.: compra de linhas'}"></div>
+    <div class="field"><label for="m-val">Valor (R$)</label><input class="in num" id="m-val" inputmode="decimal" placeholder="0,00"></div>
+    <div class="field"><label for="m-cat">Categoria</label><select class="in" id="m-cat">${S.catsFin.filter(c => c.tipo===tipo).map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select></div>
+    <div class="field"><label for="m-forma">Forma de pagamento</label><select class="in" id="m-forma">${S.formas.filter(f=>f.ativo).map(f => `<option value="${f.id}">${esc(f.nome)}</option>`).join('')}</select></div></div>`,
+    actions:[{label:'Voltar'},{label:'Lançar', cls:'pri', fn:() => { const v = parseBRL($('#m-val').value), d = $('#m-desc').value.trim();
+      if (!d) { toast('Informe a descrição.'); return false; } if (!v) { toast('Informe um valor maior que zero.'); return false; }
+      S.lanc.push(mkLanc(tipo, TODAY, v, $('#m-forma').value, $('#m-cat').value, d)); toast((tipo==='entrada'?'Entrada':'Saída') + ' de ' + brl(v) + ' lançada.'); render(); }}]}));
+}
+function fecharCaixa(){
+  const esp = esperadoDinheiro(TODAY);
+  modal({title:'Fechar o caixa de ' + fD(TODAY), body:`<div class="grid" style="gap:12px"><p style="margin:0">Conte o dinheiro da gaveta. O sistema esperava <b class="num">${brl(esp)}</b>.</p>
+    <div class="field"><label for="m-cont">Valor contado (R$)</label><input class="in num" id="m-cont" inputmode="decimal" value="${cents2in(esp)}"></div><div id="m-dif" class="alert a-info">Sem diferença.</div>
+    <p class="muted" style="margin:0;font-size:.85rem">Depois de fechado, o caixa de hoje não aceita novos lançamentos, a não ser que seja reaberto.</p></div>`,
+    actions:[{label:'Voltar'},{label:'Fechar caixa', cls:'pri', fn:() => { const c = S.caixas[TODAY]; c.contado = parseBRL($('#m-cont').value); c.fechado = TODAY; toast('Caixa fechado.'); render(); }}]});
+  $('#m-cont').addEventListener('input', e => { const d = parseBRL(e.target.value) - esp; const el = $('#m-dif');
+    el.className = 'alert ' + (d===0 ? 'a-info' : 'a-warn'); el.textContent = d===0 ? 'Sem diferença.' : (d<0 ? 'Faltam ' : 'Sobram ') + brl(Math.abs(d)) + ' na gaveta.'; });
+}
+function novaConta(){
+  modal({title:'Nova conta a pagar', body:`<div class="grid" style="gap:12px"><div class="field"><label for="m-desc">Descrição</label><input class="in" id="m-desc" placeholder="Ex.: aluguel de dezembro"></div>
+    <div class="grid g2" style="gap:12px"><div class="field"><label for="m-val">Valor (R$)</label><input class="in num" id="m-val" inputmode="decimal"></div>
+    <div class="field"><label for="m-venc">Vencimento</label><input class="in" type="date" id="m-venc" value="${addDays(TODAY,10)}"></div></div>
+    <div class="field"><label for="m-cat">Categoria</label><select class="in" id="m-cat">${S.catsFin.filter(c => c.tipo==='saida').map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select></div></div>`,
+    actions:[{label:'Voltar'},{label:'Cadastrar', cls:'pri', fn:() => { const v = parseBRL($('#m-val').value), d = $('#m-desc').value.trim();
+      if (!d || !v) { toast('Preencha descrição e valor.'); return false; }
+      S.contas.push({id:uid(), desc:d, valor:v, venc:$('#m-venc').value || TODAY, cat:$('#m-cat').value, status:'aberta'}); toast('Conta cadastrada.'); render(); }}]});
+}
+function pagarConta(id){
+  const k = S.contas.find(x => x.id === id);
+  requireCaixa(() => modal({title:'Pagar: ' + esc(k.desc), body:`<div class="grid" style="gap:12px"><p style="margin:0">Valor: <b class="num">${brl(k.valor)}</b>. O pagamento vira uma saída no caixa de hoje.</p>
+    <div class="field"><label for="m-forma">Forma de pagamento</label><select class="in" id="m-forma">${S.formas.filter(f=>f.ativo).map(f => `<option value="${f.id}">${esc(f.nome)}</option>`).join('')}</select></div></div>`,
+    actions:[{label:'Voltar'},{label:'Confirmar pagamento', cls:'pri', fn:() => { S.lanc.push(mkLanc('saida', TODAY, k.valor, $('#m-forma').value, k.cat, k.desc, null, {conta:k.id})); k.status='paga'; k.paga=TODAY; toast('Conta paga.'); render(); }}]}));
+}
+
+/* ---------- CONFIGURAÇÕES ---------- */
+const CT = [['atelie','Ateliê'],['servicos','Categorias e serviços'],['precos','Tabelas de preço'],['fin','Financeiro']];
+function vCfg(){
+  const R = {atelie:cfgAtelie, servicos:cfgServicos, precos:cfgPrecos, fin:cfgFin};
+  return `<div class="head"><div><h1>Configurações</h1><p>As mudanças valem na hora para todo o sistema.</p></div></div>
+    <div class="tabs">${CT.map(([k,l]) => `<button class="${ui.cfgTab===k?'on':''}" data-act="cfg-tab" data-tab="${k}">${l}</button>`).join('')}</div>${R[ui.cfgTab]()}`;
+}
+function cfgAtelie(){
+  const c = S.config, f = (k, l, t) => `<div class="field"><label for="cfg-${k}">${l}</label><input class="in ${t==='number'?'num':''}" id="cfg-${k}" data-cfg="${k}" ${t?`type="${t}" min="1"`:''} value="${esc(c[k])}"></div>`;
+  return `<div class="grid g2"><div class="panel"><h2>Dados para o cabeçalho da OS</h2>${f('nome','Nome do ateliê')}${f('telefone','Telefone')}${f('endereco','Endereço')}${f('documento','CPF ou CNPJ (opcional)')}
+      <div class="field"><label for="cfg-rodape">Texto no rodapé da OS</label><textarea class="in" id="cfg-rodape" data-cfg="rodape">${esc(c.rodape)}</textarea></div></div>
+    <div class="panel"><h2>Capacidade da agenda</h2>${f('capacidade','Entregas por dia (lotado a partir de)','number')}${f('limite','Mostrar "quase cheio" a partir de','number')}
+      <p class="muted" style="margin:0;font-size:.88rem">Dia lotado não bloqueia: o sistema avisa e pede confirmação para encaixar.</p></div></div>`;
+}
+function cfgServicos(){
+  return `<div class="panel"><div class="row"><input class="in" id="nova-cat" placeholder="Nova categoria" style="flex:1;min-width:180px"><button class="btn" data-act="add-cat">Adicionar categoria</button></div>
+    <div class="row"><select class="in" id="ns-cat" style="width:auto">${S.categorias.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select><input class="in" id="ns-nome" placeholder="Novo serviço" style="flex:1;min-width:180px">
+      <button class="btn pri" data-act="add-serv">Adicionar serviço</button></div></div>
+    <div class="grid g2">${S.categorias.map(c => `<div class="panel"><div class="panel-h"><h2 style="${c.ativo?'':'opacity:.5'}">${esc(c.nome)}</h2><button class="btn sm" data-act="tog-cat" data-id="${c.id}">${c.ativo?'Desativar':'Ativar'}</button></div>
+      <div class="list">${S.servicos.filter(s => s.cat===c.id).map(s => `<div class="li" style="cursor:default"><span style="${s.ativo?'':'opacity:.5;text-decoration:line-through'}">${esc(s.nome)}</span>
+        <span class="row"><span class="num muted">${brl(S.precos.t1[s.id]||0)}</span><button class="btn sm" data-act="tog-serv" data-id="${s.id}">${s.ativo?'Desativar':'Ativar'}</button></span></div>`).join('') || '<div class="empty">Nenhum serviço.</div>'}</div></div>`).join('')}</div>
+    <p class="muted" style="margin:0;font-size:.88rem">Itens já usados em OS são desativados em vez de apagados, para o histórico continuar correto.</p>`;
+}
+function cfgPrecos(){
+  return `<div class="panel"><div class="panel-h"><h2>Preço de cada serviço por tabela</h2><div class="row"><input class="in" id="nova-tab" placeholder="Nome da nova tabela" style="width:200px"><button class="btn" data-act="add-tab">Criar tabela (copia a Padrão)</button></div></div>
+    <div class="tw"><table><thead><tr><th>Serviço</th>${S.tabelas.map(t => `<th class="r">${esc(t.nome)}${t.padrao?' · padrão':''}</th>`).join('')}</tr></thead><tbody>
+    ${S.categorias.map(c => `<tr><td colspan="${S.tabelas.length+1}" style="font-weight:700;background:var(--sunk)">${esc(c.nome)}</td></tr>` + S.servicos.filter(s => s.cat===c.id).map(s => `<tr><td>${esc(s.nome)}</td>
+      ${S.tabelas.map(t => `<td class="r"><input class="in num" data-preco="${t.id}|${s.id}" inputmode="decimal" value="${cents2in((S.precos[t.id]||{})[s.id]||0)}" style="width:110px;text-align:right" aria-label="${esc(s.nome)} na tabela ${esc(t.nome)}"></td>`).join('')}</tr>`).join('')).join('')}
+    </tbody></table></div><p class="muted" style="margin:0;font-size:.88rem">Na OS, o preço vem desta tabela e pode ser alterado item a item.</p></div>`;
+}
+function cfgFin(){
+  const lista = (tipo, t) => `<div class="panel"><h2>${t}</h2><div class="list">${S.catsFin.filter(c => c.tipo===tipo).map(c => `<div class="li" style="cursor:default"><span>${esc(c.nome)}</span></div>`).join('')}</div>
+    <div class="row"><input class="in" id="ncf-${tipo}" placeholder="Nova categoria" style="flex:1"><button class="btn sm" data-act="add-catfin" data-tipo="${tipo}">Adicionar</button></div></div>`;
+  return `<div class="grid g2">${lista('entrada','Categorias de entrada')}${lista('saida','Categorias de saída')}
+    <div class="panel"><h2>Formas de pagamento</h2><div class="list">${S.formas.map(f => `<div class="li" style="cursor:default"><span style="${f.ativo?'':'opacity:.5;text-decoration:line-through'}">${esc(f.nome)}${f.dinheiro?' <span class="pill p-neutral">conta na gaveta</span>':''}</span>
+      <button class="btn sm" data-act="tog-forma" data-id="${f.id}">${f.ativo?'Desativar':'Ativar'}</button></div>`).join('')}</div>
+      <div class="row"><input class="in" id="nova-forma" placeholder="Ex.: Vale-presente" style="flex:1"><button class="btn sm" data-act="add-forma">Adicionar</button></div></div></div>`;
+}
+
+/* ---------- eventos ---------- */
+const A = {
+  'nova-os': () => { ui.osEdit = novaOS(); go('os'); },
+  'nova-os-dia': b => { ui.osEdit = novaOS(); ui.osEdit.entrega = b.dataset.d; go('os'); },
+  'nova-os-cli': () => { ui.osEdit = novaOS(ui.cliente); go('os'); },
+  'abrir-os': b => abrirOS(b.dataset.id),
+  'voltar-os': () => { ui.osEdit = null; render(); },
+  'salvar-os': () => salvarOS(false),
+  'add-item': () => { ui.osEdit.itens.push({peca:'', servico:'', descricao:'', qtd:1, valor:0}); renderItens(); updTotais(); const r = document.querySelectorAll('#itens .it:not(.it-h)'); r[r.length-1].querySelector('input').focus(); },
+  'rm-item': b => { ui.osEdit.itens.splice(+b.dataset.i,1); renderItens(); updTotais(); },
+  'set-entrega': b => { ui.osEdit.entrega = b.dataset.d; $('#f-entrega').value = b.dataset.d; renderStrip(); },
+  'status': b => setStatus(b.dataset.st),
+  'cancelar-os': cancelarOS,
+  'pagar-os': pagarOS,
+  'imprimir': imprimir,
+  'estornar': b => estornar(b.dataset.id),
+  'cli-rapido': () => cliRapido(c => { ui.osEdit.cliente = c.id; render(); }),
+  'dia': b => { ui.dia = b.dataset.d; if (b.dataset.d.slice(0,7) !== ui.mes) ui.mes = b.dataset.d.slice(0,7); render(); },
+  'mes': b => { const [y,m] = ui.mes.split('-').map(Number); const d = new Date(y, m-1+(+b.dataset.n), 1, 12); ui.mes = ymd(d).slice(0,7); render(); },
+  'agview': b => { ui.agView = b.dataset.v; render(); },
+  'semana': b => { ui.dia = addDays(ui.dia, +b.dataset.n); ui.mes = ui.dia.slice(0,7); render(); },
+  'nova-cli': () => cliRapido(c => { ui.cliente = c.id; render(); }),
+  'abrir-cli': b => { ui.cliente = b.dataset.id; render(); window.scrollTo(0,0); },
+  'voltar-cli': () => { ui.cliente = null; render(); },
+  'editar-cli': () => { const c = cli(ui.cliente); modal({title:'Editar cliente', body:`<div class="grid" style="gap:12px"><div class="field"><label for="m-nome">Nome</label><input class="in" id="m-nome" value="${esc(c.nome)}"></div>
+      <div class="field"><label for="m-tel">Telefone</label><input class="in" id="m-tel" value="${fmtTel(c.tel)}"></div><div class="field"><label for="m-obs">Observações</label><textarea class="in" id="m-obs">${esc(c.obs)}</textarea></div></div>`,
+      actions:[{label:'Voltar'},{label:'Salvar', cls:'pri', fn:() => { const n = $('#m-nome').value.trim(); if (!n) { toast('Informe o nome.'); return false; } c.nome = n; c.tel = $('#m-tel').value.replace(/\D/g,''); c.obs = $('#m-obs').value.trim(); toast('Cliente atualizada.'); render(); }}]}); },
+  'fin-tab': b => { ui.finTab = b.dataset.tab; render(); },
+  'ir-fin': b => { ui.finTab = b.dataset.tab; go('financeiro'); },
+  'novo-lanc': b => novoLanc(b.dataset.tipo),
+  'abrir-caixa': () => requireCaixa(() => toast('Caixa aberto.')),
+  'fechar-caixa': fecharCaixa,
+  'reabrir-caixa': () => confirmar('Reabrir o caixa de hoje?', 'A reabertura fica registrada. Lembre de fechar de novo no fim do dia.', 'Reabrir', () => { const c = S.caixas[TODAY]; c.fechado = null; c.reaberto = new Date().toLocaleTimeString('pt-BR').slice(0,5); render(); }),
+  'nova-conta': novaConta,
+  'pagar-conta': b => pagarConta(b.dataset.id),
+  'cfg-tab': b => { ui.cfgTab = b.dataset.tab; render(); },
+  'add-cat': () => { const n = $('#nova-cat').value.trim(); if (!n) return toast('Digite o nome da categoria.'); S.categorias.push({id:uid(), nome:n, ativo:true}); render(); toast('Categoria criada.'); },
+  'add-serv': () => { const n = $('#ns-nome').value.trim(); if (!n) return toast('Digite o nome do serviço.'); const s = {id:uid(), cat:$('#ns-cat').value, nome:n, ativo:true}; S.servicos.push(s); S.tabelas.forEach(t => (S.precos[t.id] ||= {})[s.id] = 0); render(); toast('Serviço criado. Defina o preço em Tabelas de preço.'); },
+  'tog-cat': b => { const c = S.categorias.find(x => x.id === b.dataset.id); c.ativo = !c.ativo; render(); },
+  'tog-serv': b => { const s = serv(b.dataset.id); s.ativo = !s.ativo; render(); },
+  'add-tab': () => { const n = $('#nova-tab').value.trim(); if (!n) return toast('Digite o nome da tabela.'); const t = {id:uid(), nome:n, padrao:false}; S.tabelas.push(t); S.precos[t.id] = {...S.precos.t1}; render(); toast('Tabela criada com os preços da Padrão.'); },
+  'add-catfin': b => { const el = $('#ncf-' + b.dataset.tipo), n = el.value.trim(); if (!n) return toast('Digite o nome da categoria.'); S.catsFin.push({id:uid(), nome:n, tipo:b.dataset.tipo}); render(); },
+  'add-forma': () => { const n = $('#nova-forma').value.trim(); if (!n) return toast('Digite o nome da forma.'); S.formas.push({id:uid(), nome:n, ativo:true}); render(); },
+  'tog-forma': b => { const f = forma(b.dataset.id); f.ativo = !f.ativo; render(); }
+};
+$('#main').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b || b.disabled) return; e.preventDefault(); e.stopPropagation(); A[b.dataset.act](b); });
+
+$('#main').addEventListener('input', e => {
+  const t = e.target, d = ui.osEdit;
+  if (t.id === 'os-busca') { ui.osBusca = t.value; $('#os-tabela').innerHTML = osTabela(); return; }
+  if (t.id === 'cli-busca') { ui.cliBusca = t.value; $('#cli-tabela').innerHTML = cliTabela(); return; }
+  if (t.dataset.cfg) { const k = t.dataset.cfg; S.config[k] = t.type === 'number' ? Math.max(1, parseInt(t.value)||1) : t.value; if (k==='nome') $('#brand-nome').textContent = t.value; return; }
+  if (t.dataset.preco) { const [tid,sid] = t.dataset.preco.split('|'); (S.precos[tid] ||= {})[sid] = parseBRL(t.value); return; }
+  if (!d) return;
+  const row = t.closest('.it');
+  if (row && t.dataset.f) { const it = d.itens[+row.dataset.i], f = t.dataset.f;
+    if (f === 'qtd') it.qtd = Math.max(0, parseInt(t.value)||0); else if (f === 'valor') it.valor = parseBRL(t.value); else if (f !== 'servico') it[f] = t.value;
+    updTotais(); return; }
+  if (t.id === 'f-desc') { d.desconto = parseBRL(t.value); updTotais(); }
+  if (t.id === 'f-obs') d.obs = t.value;
+});
+$('#main').addEventListener('change', e => {
+  const t = e.target, d = ui.osEdit;
+  if (t.id === 'os-status') { ui.osStatus = t.value; $('#os-tabela').innerHTML = osTabela(); return; }
+  if (t.id === 'lanc-per') { ui.lancPer = t.value; render(); return; }
+  if (t.id === 'lanc-tipo') { ui.lancTipo = t.value; render(); return; }
+  if (t.id === 'res-per') { ui.resPer = t.value; render(); return; }
+  if (t.dataset.cfg && t.type === 'number') { render(); return; }
+  if (!d) return;
+  const row = t.closest('.it');
+  if (row && t.dataset.f === 'servico') { const it = d.itens[+row.dataset.i]; it.servico = t.value;
+    if (t.value) { it.valor = (S.precos[d.tabela]||{})[t.value] || 0; row.querySelector('[data-f="valor"]').value = cents2in(it.valor); if (!it.peca.trim()) row.querySelector('[data-f="peca"]').focus(); }
+    updTotais(); return; }
+  if (t.id === 'f-cli') { d.cliente = t.value; $('#cli-info').innerHTML = cliInfo(t.value); }
+  if (t.id === 'f-entrada') { d.entrada = t.value; renderStrip(); }
+  if (t.id === 'f-entrega') { d.entrega = t.value; renderStrip(); }
+  if (t.id === 'f-tab') { d.tabela = t.value; let n = 0; d.itens.forEach(it => { if (it.servico) { it.valor = (S.precos[d.tabela]||{})[it.servico] || 0; n++; } }); renderItens(); updTotais();
+    if (n) toast('Preços atualizados pela tabela ' + S.tabelas.find(x => x.id === d.tabela).nome + '.'); }
+});
+
+seed();
+render();
+})();
+</script>
+</body>
+</html>
