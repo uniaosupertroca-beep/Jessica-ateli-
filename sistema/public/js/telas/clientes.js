@@ -1,5 +1,5 @@
 import { api, novaChave, sessao } from '../api.js';
-import { $, brl, dataBR, dataHora, esc, fecharModal, formatarTelefone, modal, nOS, pill, toast } from '../ui.js';
+import { $, brl, dataBR, dataHora, esc, fecharModal, formatarTelefone, modal, nOS, pill, tagUn, toast } from '../ui.js';
 import { lerValor, linkWhatsApp, MODELOS_MENSAGEM, normalizarTelefone, numeroWhatsApp, valorParaCampo } from '../regras.js';
 import { modalAbrirCaixa, modalEstorno } from './ordens.js';
 import { cabecalhoDoc, estiloDoc } from '../documento.js';
@@ -211,7 +211,7 @@ function editarCliente(c) {
 function abaOrdens(alvo, d, verValores) {
   alvo.innerHTML = `<div class="panel"><h2>Histórico de OS</h2><div class="tw">${d.ordens.length ? `<table><thead><tr><th>OS</th><th>Abertura</th><th>Prazo</th><th>Peças</th><th>Serviços</th><th>Situação</th>
       ${verValores ? '<th class="r">Total</th><th class="r">Falta</th>' : ''}</tr></thead><tbody>
-    ${d.ordens.map(o => `<tr class="click" data-href="#ordens/${o.id}"><td class="num">${nOS(o.numero)}</td><td>${dataBR(o.aberta_em)}</td><td>${dataBR(o.prazo)}</td>
+    ${d.ordens.map(o => `<tr class="click" data-href="#ordens/${o.id}"><td class="num">${nOS(o.numero)}${tagUn(o.unidade_sigla)}</td><td>${dataBR(o.aberta_em)}</td><td>${dataBR(o.prazo)}</td>
       <td>${esc(o.pecas || '')}</td><td class="muted">${esc(o.servicos || '')}</td><td>${pill(o.status)}</td>
       ${verValores ? `<td class="r num">${brl(o.total)}</td><td class="r num">${o.saldo > 0 && o.status !== 'cancelada' ? brl(o.saldo) : '—'}</td>` : ''}</tr>`).join('')}</tbody></table>`
     : '<div class="empty">Esta cliente ainda não tem OS.</div>'}</div></div>`;

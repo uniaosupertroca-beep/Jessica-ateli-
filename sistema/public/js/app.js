@@ -1,5 +1,5 @@
 // Ponto de entrada: login, menu e navegação entre telas (por endereço #tela/parametro).
-import { api, carregarConfig, ErroApi, sessao } from './api.js';
+import { api, carregarConfig, definirUnidades, ErroApi, sessao } from './api.js';
 import { $, esc, fecharModal, toast } from './ui.js';
 import { telaLogin, telaConfigurarInicial, telaTrocarSenha } from './telas/login.js';
 import { telaInicio } from './telas/inicio.js';
@@ -117,6 +117,7 @@ async function sair() {
   sessao.eu = null;
   location.hash = '';
   iniciar();
+}
 
 /* App instalável (PWA): registra o service worker e avisa quando há versão nova. */
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
@@ -137,7 +138,6 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   let recarregou = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (!recarregou) { recarregou = true; location.reload(); } });
 }
-}
 
 document.addEventListener('click', e => {
   if (e.target.closest('[data-sair]')) return sair();
@@ -148,6 +148,7 @@ document.addEventListener('click', e => {
   if (e.target.id === 'mais') $('#mais').hidden = true;
 });
 window.addEventListener('hashchange', () => { renderizar(); window.scrollTo(0, 0); });
+window.addEventListener('unidade-trocada', async () => { await carregarConfig().catch(() => {}); renderizar(); });
 window.addEventListener('sessao-expirada', () => {
   if (!sessao.eu) return;
   sessao.eu = null;
@@ -171,6 +172,7 @@ export async function iniciar() {
     sessao.eu = eu.usuario;
     sessao.perms = new Set(eu.permissoes);
     sessao.hoje = eu.hoje;
+    definirUnidades(eu.unidades);
     if (eu.usuario.trocar_senha) {
       document.body.classList.add('deslogado');
       const el = document.createElement('div');

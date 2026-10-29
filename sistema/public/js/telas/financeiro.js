@@ -5,6 +5,7 @@ import { modalAbrirCaixa, modalEstorno } from './ordens.js';
 
 const ABAS = [['caixa', 'Caixa do dia'], ['lancamentos', 'Lançamentos'], ['receber', 'A receber'], ['pagar', 'A pagar']];
 const est = { aba: 'caixa', de: null, ate: null, tipo: '' };
+const un = sigla => sigla && sessao.unidades.length > 1 ? ` <span class="tag-un">${esc(sigla)}</span>` : '';
 
 export async function telaFinanceiro(el, _p, vivo) {
   est.de ??= somarDias(sessao.hoje, -6);
@@ -54,7 +55,7 @@ function tabelaLancamentos(ls, comData) {
   if (!ls.length) return '<div class="empty">Nenhum lançamento.</div>';
   return `<div class="tw"><table><thead><tr>${comData ? '<th>Data</th>' : '<th>Hora</th>'}<th>Descrição</th><th>Categoria</th><th>Forma</th><th>Por</th><th class="r">Valor</th><th></th></tr></thead><tbody>
     ${ls.map(l => `<tr>${comData ? `<td>${dataBR(l.data)}</td>` : `<td class="num">${dataHora(l.criado_em).slice(11)}</td>`}
-      <td>${esc(l.descricao)}${l.order_id ? ` <a class="btn link sm" href="#ordens/${l.order_id}">${nOS(l.os_numero)}</a>` : ''}</td>
+      <td>${esc(l.descricao)}${un(l.unidade_sigla)}${l.order_id ? ` <a class="btn link sm" href="#ordens/${l.order_id}">${nOS(l.os_numero)}</a>` : ''}</td>
       <td class="muted">${esc(l.categoria)}</td><td>${esc(l.forma)}</td><td class="muted">${esc(l.usuario || '')}</td>
       <td class="r num" style="color:${l.tipo === 'entrada' ? 'var(--ok)' : 'var(--crit)'};white-space:nowrap">${l.tipo === 'entrada' ? '+ ' : '− '}${brl(l.valor_centavos)}</td>
       <td class="r">${l.estornado_por ? '<span class="pill p-muted">Estornado</span>' : l.estorno_de ? '<span class="pill p-warn">Estorno</span>' : podeEstornar ? `<button class="btn sm" data-a="estornar" data-id="${l.id}">Estornar</button>` : ''}</td></tr>`).join('')}
@@ -63,6 +64,20 @@ function tabelaLancamentos(ls, comData) {
 
 async function abaCaixa(alvo, data = sessao.hoje) {
   const c = await api(`/caixa?data=${data}`);
+  if (c.por_unidade) {
+    // Visão "todas as unidades": um caixa por unidade; para operar, escolhe-se a unidade no topo.
+    const t = k => c.por_unidade.reduce((x, u) => x + (u[k] || 0), 0);
+    alvo.innerHTML = `<div class="row" style="margin:12px 0"><label class="row" style="gap:6px">Dia <input class="in" type="date" id="cx-data" value="${data}" max="${c.hoje}" style="width:auto"></label></div>
+      <div class="grid g3"><div class="panel stat"><span class="lbl">Entradas (todas)</span><span class="val num" style="color:var(--ok)">${brl(t('entradas'))}</span></div>
+        <div class="panel stat"><span class="lbl">Saídas (todas)</span><span class="val num" style="color:var(--crit)">${brl(t('saidas'))}</span></div>
+        <div class="panel stat"><span class="lbl">Dinheiro nas gavetas</span><span class="val num">${brl(t('dinheiro_esperado'))}</span><span class="sub">esperado</span></div></div>
+      <div class="panel"><h2>Caixa de cada unidade em ${dataBR(data)}</h2><div class="tw"><table><thead><tr><th>Unidade</th><th>Situação</th><th class="r">Entradas</th><th class="r">Saídas</th><th class="r">Na gaveta</th></tr></thead><tbody>
+        ${c.por_unidade.map(u => `<tr><td><b>${esc(u.nome)}</b> <span class="tag-un">${esc(u.sigla)}</span></td>
+          <td>${!u.sessao ? '<span class="pill p-muted">Não aberto</span>' : u.sessao.fechado_em ? `<span class="pill p-neutral">Fechado${u.diferenca ? ` · diferença ${brl(u.diferenca)}` : ''}</span>` : '<span class="pill p-ok">Aberto</span>'}</td>
+          <td class="r num">${brl(u.entradas || 0)}</td><td class="r num">${brl(u.saidas || 0)}</td><td class="r num">${brl(u.dinheiro_esperado || 0)}</td></tr>`).join('')}</tbody></table></div>
+        <p class="ajuda" style="margin:0">Para abrir, fechar ou lançar, escolha a unidade no topo da tela.</p></div>`;
+    return;
+  }
   const s = c.sessao;
   const ehHoje = data === c.hoje;
   alvo.innerHTML = `<div class="row" style="margin:12px 0"><label class="row" style="gap:6px">Dia <input class="in" type="date" id="cx-data" value="${data}" max="${c.hoje}" style="width:auto"></label></div>
@@ -102,7 +117,7 @@ async function abaReceber(alvo) {
   const r = await api('/financeiro/receber');
   alvo.innerHTML = `<div class="panel" style="margin-top:12px"><div class="panel-h"><h2>A receber</h2><span class="num" style="font-weight:700;font-size:1.1rem">${brl(r.total)}</span></div>
     ${r.ordens.length ? `<div class="tw"><table><thead><tr><th>OS</th><th>Cliente</th><th>Prazo</th><th>Situação</th><th class="r">Total</th><th class="r">Pago</th><th class="r">Falta</th></tr></thead><tbody>
-      ${r.ordens.map(o => `<tr><td class="num"><a href="#ordens/${o.id}">${nOS(o.numero)}</a></td><td><a href="#clientes/${o.client_id}" style="color:inherit">${esc(o.cliente)}</a></td>
+      ${r.ordens.map(o => `<tr><td class="num"><a href="#ordens/${o.id}">${nOS(o.numero)}</a>${un(o.unidade_sigla)}</td><td><a href="#clientes/${o.client_id}" style="color:inherit">${esc(o.cliente)}</a></td>
         <td>${dataBR(o.prazo)}</td><td>${pill(o.status)}${o.status === 'pronta' ? ' <span class="pill p-warn">cobrar na retirada</span>' : ''}</td>
         <td class="r num">${brl(o.total)}</td><td class="r num">${brl(o.pago)}</td><td class="r num" style="color:var(--warn);font-weight:600">${brl(o.saldo)}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">Nada a receber.</div>'}</div>
@@ -186,8 +201,8 @@ async function abaPagar(alvo, depois) {
       <div class="panel stat" style="justify-content:center">${pode ? '<button class="btn pri" data-nova-conta>+ Nova conta a pagar</button>' : ''}</div></div>
     <div class="panel"><div class="row"><select class="in" id="p-st" style="width:auto">${[['abertas', 'Em aberto'], ['pagas', 'Pagas'], ['canceladas', 'Canceladas'], ['todas', 'Todas']]
       .map(([k, l]) => `<option value="${k}" ${filtroPagar === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-    ${r.contas.length ? `<div class="tw"><table><thead><tr><th>Vencimento</th><th>Descrição</th><th>Categoria</th><th>Fornecedor</th><th>Situação</th><th class="r">Valor</th><th></th></tr></thead><tbody>
-      ${r.contas.map(k => `<tr><td>${dataBR(k.vencimento)}</td><td>${esc(k.descricao)}${k.observacoes ? `<div class="ajuda">${esc(k.observacoes)}</div>` : ''}</td><td class="muted">${esc(k.categoria)}</td>
+    ${r.contas.length ? `<div class="tw"><table><thead><tr><th>Vencimento</th><th>Descrição</th>${sessao.unidades.length > 1 ? '<th>Unidade</th>' : ''}<th>Categoria</th><th>Fornecedor</th><th>Situação</th><th class="r">Valor</th><th></th></tr></thead><tbody>
+      ${r.contas.map(k => `<tr><td>${dataBR(k.vencimento)}</td><td>${esc(k.descricao)}${k.observacoes ? `<div class="ajuda">${esc(k.observacoes)}</div>` : ''}</td>${sessao.unidades.length > 1 ? `<td><span class="tag-un">${esc(k.unidade_sigla)}</span></td>` : ''}<td class="muted">${esc(k.categoria)}</td>
         <td class="muted">${esc(k.fornecedor || '')}</td>
         <td>${k.status === 'paga' ? `<span class="pill p-ok">Paga em ${dataBR(k.paga_em)}</span>` : k.status === 'cancelada' ? `<span class="pill p-muted" title="${esc(k.motivo_cancelamento || '')}">Cancelada</span>`
           : k.vencida ? '<span class="pill p-crit">Vencida</span>' : k.vencimento <= somarDias(sessao.hoje, 7) ? '<span class="pill p-warn">Vence em breve</span>' : '<span class="pill p-neutral">Em aberto</span>'}</td>
@@ -224,13 +239,15 @@ async function novaConta(depois) {
       <div class="field"><label for="n-cat">Categoria</label><select class="in" id="n-cat">${opcoes(cats)}</select></div>
       <div class="field"><label for="n-parc">Parcelas</label><input class="in num" id="n-parc" type="number" min="1" max="36" value="1"></div>
       <div class="field" style="grid-column:1/-1"><label for="n-forn">Fornecedor</label><select class="in" id="n-forn">${opcoes(fornecedores.filter(f => f.ativo), null, '— nenhum —')}</select></div>
-      <div class="field" style="grid-column:1/-1"><label for="n-obs">Observações</label><input class="in" id="n-obs"></div></div>`,
+      <div class="field" style="grid-column:1/-1"><label for="n-obs">Observações</label><input class="in" id="n-obs"></div>
+      ${sessao.unidades.length > 1 ? `<label class="chk" style="grid-column:1/-1"><input type="checkbox" id="n-grupo" ${sessao.unidade ? '' : 'checked'}> Despesa do grupo (todas as unidades, ex.: contador)</label>
+        <p class="ajuda" style="grid-column:1/-1;margin:0">Sem marcar, a conta fica na unidade escolhida no topo${sessao.unidade ? ` (${esc(sessao.unidades.find(u => u.id === sessao.unidade)?.nome || '')})` : ''}.</p>` : ''}</div>`,
     actions: [{ label: 'Voltar' }, { label: 'Cadastrar', cls: 'pri', fn: async m => {
       const v = lerValor($('#n-val', m).value);
       if (!v) { toast('Informe o valor.', true); return false; }
       try {
         await api('/pagar', { corpo: { descricao: $('#n-desc', m).value.trim(), valor_centavos: v, vencimento: $('#n-venc', m).value, categoria_id: $('#n-cat', m).value,
-          parcelas: Number($('#n-parc', m).value) || 1, supplier_id: $('#n-forn', m).value || null, observacoes: $('#n-obs', m).value.trim() } });
+          parcelas: Number($('#n-parc', m).value) || 1, supplier_id: $('#n-forn', m).value || null, observacoes: $('#n-obs', m).value.trim(), do_grupo: !!$('#n-grupo', m)?.checked } });
       } catch (e) { toast(e.message, true); return false; }
       toast('Conta cadastrada.'); depois();
     } }],

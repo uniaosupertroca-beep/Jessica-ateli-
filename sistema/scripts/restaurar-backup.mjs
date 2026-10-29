@@ -20,11 +20,12 @@ if (backup.formato !== 'atelie-jessica-backup-v1') throw new Error('Arquivo não
 // Travas de inserção que dependem da ordem dos acontecimentos: são removidas durante a carga
 // e recriadas no fim, exatamente como estão nas migrations.
 const TRAVAS = ['cm_caixa_aberto', 'cm_sem_excesso', 'cm_os_cancelada', 'cm_estorno_valido', 'cc_sem_negativo', 'item_com_foto',
-  'sm_sem_negativo', 'sm_reversao_valida', 'sm_atualiza_saldo', 'mat_saldo_protegido'];
+  'sm_sem_negativo', 'sm_reversao_valida', 'sm_atualiza_saldo', 'mat_saldo_protegido', 'units_sem_delete'];
 const pasta = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
 const sqlMigrations = readdirSync(pasta).filter(f => f.endsWith('.sql')).sort().map(f => readFileSync(join(pasta, f), 'utf8')).join('\n');
+// Vale a definição mais recente (migrations posteriores recriam algumas travas, ex.: caixa por unidade).
 const definicoes = TRAVAS.map(nome => {
-  const m = sqlMigrations.match(new RegExp(`CREATE TRIGGER ${nome}\\b[\\s\\S]*?END;`));
+  const m = [...sqlMigrations.matchAll(new RegExp(`CREATE TRIGGER ${nome}\\b[\\s\\S]*?END;`, 'g'))].at(-1);
   if (!m) throw new Error('Trava não encontrada nas migrations: ' + nome);
   return m[0];
 });
@@ -35,6 +36,8 @@ linhas.push(...TRAVAS.map(t => `DROP TRIGGER IF EXISTS ${t};`));
 // Dados iniciais das migrations são substituídos pelos do backup.
 for (const t of ['system_settings', 'payment_methods', 'finance_categories', 'measurement_fields', 'service_catalog', 'service_categories'])
   linhas.push(`DELETE FROM ${t};`);
+// Backups com unidades substituem a "Matriz" criada pela migration; os antigos ficam com ela.
+if (backup.tabelas.units) linhas.push('DELETE FROM user_units;', 'DELETE FROM units;');
 let total = 0;
 for (const [tabela, registros] of Object.entries(backup.tabelas)) {
   for (const r of registros) {

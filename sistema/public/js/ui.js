@@ -1,5 +1,9 @@
 // Utilidades de interface: escape de HTML, modal, confirmação, aviso (toast) e formatação.
 import { brl, dataBR, formatarTelefone, STATUS_OS, STATUS_PRODUCAO } from './regras.js';
+import { sessao } from './api.js';
+
+/** Sigla da unidade (filial) ao lado do número da OS — só aparece quando há mais de uma unidade. */
+export const tagUn = sigla => (sigla && sessao.unidades.length > 1 ? ` <span class="tag-un">${esc(sigla)}</span>` : '');
 
 export const $ = (s, el = document) => el.querySelector(s);
 export const $$ = (s, el = document) => [...el.querySelectorAll(s)];

@@ -120,3 +120,24 @@ A pedido da Jessica, a OS não é mais aberta por QR Code. Saíram o botão de l
 | `0005_busca_por_peca.sql` | Nome da peça normalizado para a busca sem acento |
 
 Todas já estão aplicadas na homologação.
+
+## Filiais (várias unidades no mesmo sistema)
+
+Migration `0006_unidades.sql` (não destrutiva: tudo o que já existia passa a ser da unidade **Matriz**, sigla MAT).
+
+**Compartilhado entre as unidades:** clientes e medidas, catálogo e preços de serviços, cadastro de materiais, configurações, logo e textos dos documentos.
+**Separado por unidade:** OS, produção, agenda e capacidade, caixa do dia, lançamentos, saldo de estoque, equipe e contas a pagar (ou "do grupo").
+
+- **Topo da tela:** quem trabalha em mais de uma unidade escolhe a unidade (ou "Todas as unidades"). Quem tem uma só unidade não vê o seletor.
+  Na visão "todas", as telas somam/listam tudo, mas para registrar (OS, caixa, estoque) é preciso escolher uma unidade.
+- **Configurações → Unidades:** cadastro de cada filial (nome, sigla, endereço/telefone/CNPJ impressos na OS, entregas e provas por dia, horário).
+- **Equipe:** cada pessoa é ligada às unidades em que trabalha; o administrador vê todas.
+- **Numeração das OS:** única para o ateliê todo; a sigla da unidade aparece ao lado do número.
+- **Caixa:** um por unidade por dia; na visão "todas" aparece o resumo de cada caixa.
+- **Estoque:** saldo por unidade (e total do grupo); botão "Transferir para outra unidade" (sai de uma e entra na outra, sem mudar o total; não deixa negativo).
+- **Contas a pagar:** da unidade ou "do grupo" (ex.: contador); o pagamento sai do caixa da unidade que pagou.
+- **Relatórios:** filtrados pela unidade escolhida; em "todas" aparece o comparativo entre unidades.
+- **Segurança:** atendente/costureira de uma unidade não vê nem altera OS, caixa ou estoque de outra (testado em `test/unidades.test.ts`).
+- **Backup/restauração:** incluem `units` e `user_units`; o script de restauração usa a versão mais recente de cada trava.
+
+Premissas adotadas (podem ser mudadas): filiais próprias (não franquias), cada filial costura as próprias peças, mesmos preços em todas, numeração de OS única.

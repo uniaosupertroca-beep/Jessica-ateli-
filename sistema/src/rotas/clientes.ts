@@ -125,10 +125,11 @@ rotasClientes.get('/:id', async c => {
   const verValores = pode(c, 'os.financeiro.ver');
   const [ordens, pagamentos, credito, creditos, fotos, mensagens] = await Promise.all([
     db.prepare(`SELECT o.id, o.numero, o.aberta_em, o.prazo, o.status, t.total, t.pago, (t.total - t.pago) AS saldo,
+          un.sigla AS unidade_sigla,
           (SELECT GROUP_CONCAT(peca, ', ') FROM (SELECT peca FROM order_items WHERE order_id = o.id ORDER BY posicao)) AS pecas,
           (SELECT GROUP_CONCAT(descricao, ', ') FROM (SELECT s.descricao FROM order_item_services s JOIN order_items i ON i.id = s.item_id
               WHERE i.order_id = o.id ORDER BY i.posicao, s.posicao)) AS servicos
-        FROM orders o JOIN vw_order_totals t ON t.order_id = o.id WHERE o.client_id = ? ORDER BY o.numero DESC`).bind(id).all(),
+        FROM orders o JOIN vw_order_totals t ON t.order_id = o.id LEFT JOIN units un ON un.id = o.unit_id WHERE o.client_id = ? ORDER BY o.numero DESC`).bind(id).all(),
     verValores
       ? db.prepare(`SELECT m.id, m.data, m.tipo, m.natureza, m.valor_centavos, m.descricao, m.estorno_de, p.nome AS forma, o.numero AS os_numero, m.order_id,
             (SELECT 1 FROM cash_movements e WHERE e.estorno_de = m.id) AS estornado

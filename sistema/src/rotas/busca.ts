@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../env';
 import { ErroApp } from '../lib/erros';
 import { exigir, pode, textoBusca, zData } from '../lib/util';
+import { filtroUnidade } from '../lib/unidades';
 
 /** Pesquisa geral (clientes, OS, peças e materiais) e consulta da auditoria. */
 export const rotasBusca = new Hono<AppEnv>();
@@ -13,8 +14,10 @@ rotasBusca.get('/busca', async c => {
   const u = c.get('usuario');
   const dig = q.replace(/\D/g, '');
   const costureira = u.papel === 'costureira';
-  const vis = costureira ? 'AND (o.responsavel_id = ? OR EXISTS (SELECT 1 FROM order_items vi WHERE vi.order_id = o.id AND vi.responsavel_id = ?))' : '';
-  const vb = costureira ? [u.id, u.id] : [];
+  const visC = costureira ? 'AND (o.responsavel_id = ? OR EXISTS (SELECT 1 FROM order_items vi WHERE vi.order_id = o.id AND vi.responsavel_id = ?))' : '';
+  const un = filtroUnidade(c, 'o.unit_id');
+  const vis = `AND ${un.sql} ${visC}`;
+  const vb = [...un.binds, ...(costureira ? [u.id, u.id] : [])];
   const [clientes, ordens, pecas, materiais] = await Promise.all([
     pode(c, 'clientes.ver')
       ? db.prepare(`SELECT id, nome, telefone FROM clients WHERE ativo = 1 AND (nome_busca LIKE ? ${dig.length >= 4 ? 'OR telefone LIKE ? OR whatsapp LIKE ?' : ''}) ORDER BY nome_busca LIMIT 8`)

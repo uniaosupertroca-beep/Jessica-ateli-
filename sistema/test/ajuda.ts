@@ -3,13 +3,14 @@ import { exports, env } from 'cloudflare:workers';
 export const BASE = 'https://atelie.teste';
 export const db = () => (env as unknown as { DB: D1Database }).DB;
 
-type Opcoes = { metodo?: string; corpo?: unknown; cookie?: string; chave?: string; form?: FormData; origem?: string };
+type Opcoes = { metodo?: string; corpo?: unknown; cookie?: string; chave?: string; form?: FormData; origem?: string; unidade?: string };
 
 export async function chamar(caminho: string, o: Opcoes = {}) {
   const headers: Record<string, string> = {};
   if (o.cookie) headers.Cookie = o.cookie;
   if (o.chave) headers['Idempotency-Key'] = o.chave;
   if (o.origem) headers.Origin = o.origem;
+  if (o.unidade) headers['X-Unidade'] = o.unidade;
   let body: BodyInit | undefined;
   if (o.form) body = o.form;
   else if (o.corpo !== undefined) {

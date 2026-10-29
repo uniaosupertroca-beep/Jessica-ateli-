@@ -5,6 +5,8 @@ import { auditoria } from '../lib/auditoria';
 import { ErroApp, naoEncontrado, traduzirErroBanco } from '../lib/erros';
 import { agora, chaveIdempotencia, exigir, hoje, lerCorpo, uuid, zCentavos, zData } from '../lib/util';
 import { brl } from '../../public/js/regras.js';
+import { filtroUnidade, unidadeParaGravar } from '../lib/unidades';
+import { osVisivel } from './ordens';
 
 export const rotasFinanceiro = new Hono<AppEnv>();
 
@@ -35,12 +37,12 @@ async function executarIdempotente(c: Context<AppEnv>, chave: string, stmts: D1P
 
 const insertMov = (db: D1Database, m: {
   id: string; tipo: 'entrada' | 'saida'; natureza: string; valor: number; forma: string; categoria: string; descricao: string;
-  order?: string | null; client?: string | null; estornoDe?: string | null; chave?: string | null; user: string; data: string; em: string;
+  order?: string | null; client?: string | null; estornoDe?: string | null; chave?: string | null; user: string; data: string; em: string; unit: string;
 }) => db.prepare(
   `INSERT INTO cash_movements (id, data, tipo, natureza, valor_centavos, forma_id, categoria_id, descricao, order_id, client_id, estorno_de,
-     idempotency_key, criado_em, criado_por) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     idempotency_key, criado_em, criado_por, unit_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 ).bind(m.id, m.data, m.tipo, m.natureza, m.valor, m.forma, m.categoria, m.descricao, m.order ?? null, m.client ?? null, m.estornoDe ?? null,
-  m.chave ?? null, m.em, m.user);
+  m.chave ?? null, m.em, m.user, m.unit);
 
 const insertCredito = (db: D1Database, client: string, valor: number, descricao: string, movId: string, order: string | null, user: string, em: string) =>
   db.prepare('INSERT INTO customer_credits (id, client_id, valor_centavos, descricao, cash_movement_id, order_id, criado_em, criado_por) VALUES (?,?,?,?,?,?,?,?)')
@@ -67,6 +69,7 @@ rotasFinanceiro.post('/ordens/:id/pagamentos', async c => {
     `SELECT o.numero, o.client_id, o.status, t.total, t.pago FROM orders o JOIN vw_order_totals t ON t.order_id = o.id WHERE o.id = ?`,
   ).bind(orderId).first<{ numero: number; client_id: string; status: string; total: number; pago: number }>();
   if (!os) throw naoEncontrado('Ordem de serviço');
+  await osVisivel(c, orderId);
   if (os.status === 'cancelada') throw new ErroApp(409, 'os_cancelada', 'Esta OS está cancelada e não recebe pagamentos.');
   const forma = await lerForma(db, d.forma_id);
   const saldo = os.total - os.pago;
@@ -74,6 +77,7 @@ rotasFinanceiro.post('/ordens/:id/pagamentos', async c => {
   const em = agora();
   const data = hoje();
   const nOS = `OS nº ${String(os.numero).padStart(4, '0')}`;
+  const unit = unidadeParaGravar(c); // o dinheiro entra no caixa da unidade onde está sendo recebido
   const stmts: D1PreparedStatement[] = [];
 
   if (d.valor_centavos > saldo) {
@@ -86,19 +90,19 @@ rotasFinanceiro.post('/ordens/:id/pagamentos', async c => {
     stmts.push(db.prepare("INSERT INTO guards (motivo) SELECT 'saldo_mudou' FROM vw_order_totals WHERE order_id = ? AND total - pago <> ?").bind(orderId, saldo));
     if (saldo > 0)
       stmts.push(insertMov(db, { id: uuid(), tipo: 'entrada', natureza: 'recebimento_os', valor: saldo, forma: forma.id, categoria: 'fc-servicos',
-        descricao: `Pagamento ${nOS}`, order: orderId, client: os.client_id, chave, user: u, data, em }));
+        descricao: `Pagamento ${nOS}`, order: orderId, client: os.client_id, chave, user: u, data, em, unit }));
     const excesso = d.valor_centavos - Math.max(saldo, 0);
     const movCred = uuid();
     stmts.push(
       insertMov(db, { id: movCred, tipo: 'entrada', natureza: 'credito_cliente', valor: excesso, forma: forma.id, categoria: 'fc-credito',
-        descricao: `Crédito da cliente (excedente ${nOS})`, client: os.client_id, chave: `${chave}:credito`, user: u, data, em }),
+        descricao: `Crédito da cliente (excedente ${nOS})`, client: os.client_id, chave: `${chave}:credito`, user: u, data, em, unit }),
       insertCredito(db, os.client_id, excesso, `Excedente do pagamento da ${nOS}`, movCred, orderId, u, em),
     );
   } else {
     const mov = uuid();
     stmts.push(insertMov(db, { id: mov, tipo: 'entrada', natureza: 'recebimento_os', valor: d.valor_centavos, forma: forma.id,
       categoria: 'fc-servicos', descricao: `${forma.eh_credito_cliente ? 'Uso de crédito' : 'Pagamento'} ${nOS}`, order: orderId,
-      client: os.client_id, chave, user: u, data, em }));
+      client: os.client_id, chave, user: u, data, em, unit }));
     if (forma.eh_credito_cliente) stmts.push(insertCredito(db, os.client_id, -d.valor_centavos, `Usado na ${nOS}`, mov, orderId, u, em));
   }
   stmts.push(auditoria(c, 'receber', 'orders', orderId, { valor: d.valor_centavos, forma: forma.id, excedente: d.excedente }));
@@ -119,16 +123,17 @@ rotasFinanceiro.post('/financeiro/lancamentos/:id/estorno', async c => {
     `SELECT m.*, p.eh_credito_cliente FROM cash_movements m JOIN payment_methods p ON p.id = m.forma_id WHERE m.id = ?`,
   ).bind(c.req.param('id')).first<{
     id: string; tipo: 'entrada' | 'saida'; natureza: string; valor_centavos: number; forma_id: string; categoria_id: string; descricao: string;
-    order_id: string | null; client_id: string | null; eh_credito_cliente: number; payable_id: string | null;
+    order_id: string | null; client_id: string | null; eh_credito_cliente: number; payable_id: string | null; unit_id: string;
   }>();
-  if (!o) throw naoEncontrado('Lançamento');
+  if (!o || !c.get('unidades').includes(o.unit_id)) throw naoEncontrado('Lançamento');
+  const unit = unidadeParaGravar(c);
   if (o.natureza === 'estorno') throw new ErroApp(409, 'estorno_invalido', 'Um estorno não pode ser estornado.');
   const u = c.get('usuario').id;
   const em = agora();
   const id = uuid();
   const stmts = [insertMov(db, {
     id, tipo: o.tipo === 'entrada' ? 'saida' : 'entrada', natureza: 'estorno', valor: o.valor_centavos, forma: o.forma_id, categoria: o.categoria_id,
-    descricao: `Estorno: ${o.descricao} — ${motivo}`, order: o.order_id, client: o.client_id, estornoDe: o.id, chave, user: u, data: hoje(), em,
+    descricao: `Estorno: ${o.descricao} — ${motivo}`, order: o.order_id, client: o.client_id, estornoDe: o.id, chave, user: u, data: hoje(), em, unit,
   })];
   // Crédito usado volta para a cliente; crédito recebido sai da cliente.
   if (o.eh_credito_cliente && o.client_id) stmts.push(insertCredito(db, o.client_id, o.valor_centavos, `Estorno: ${o.descricao}`, id, o.order_id, u, em));
@@ -160,7 +165,7 @@ rotasFinanceiro.post('/clientes/:id/credito/devolucao', async c => {
   const mov = uuid();
   const repetido = await executarIdempotente(c, chave, [
     insertMov(db, { id: mov, tipo: 'saida', natureza: 'avulso', valor: d.valor_centavos, forma: forma.id, categoria: 'fc-devolucao',
-      descricao: `Devolução de crédito — ${cli.nome}`, client: clientId, chave, user: u, data: hoje(), em }),
+      descricao: `Devolução de crédito — ${cli.nome}`, client: clientId, chave, user: u, data: hoje(), em, unit: unidadeParaGravar(c) }),
     insertCredito(db, clientId, -d.valor_centavos, 'Crédito devolvido à cliente', mov, null, u, em),
     auditoria(c, 'devolver_credito', 'clients', clientId, { valor: d.valor_centavos }),
   ]);
@@ -197,7 +202,7 @@ rotasFinanceiro.post('/financeiro/lancamentos', async c => {
   const id = uuid();
   const repetido = await executarIdempotente(c, chave, [
     insertMov(db, { id, tipo, natureza: d.natureza, valor: d.valor_centavos, forma, categoria, descricao: d.descricao, chave,
-      user: c.get('usuario').id, data: hoje(), em: agora() }),
+      user: c.get('usuario').id, data: hoje(), em: agora(), unit: unidadeParaGravar(c) }),
     auditoria(c, 'lancar', 'cash_movements', id, d),
   ]);
   return c.json({ ok: true, id, repetido }, repetido ? 200 : 201);
@@ -207,6 +212,8 @@ rotasFinanceiro.patch('/financeiro/lancamentos/:id', async c => {
   exigir(c, 'financeiro.lancar');
   const id = c.req.param('id');
   const { descricao } = await lerCorpo(c, z.object({ descricao: z.string().trim().min(2).max(200) }));
+  const mv = await c.env.DB.prepare('SELECT unit_id FROM cash_movements WHERE id = ?').bind(id).first<{ unit_id: string }>();
+  if (!mv || !c.get('unidades').includes(mv.unit_id)) throw naoEncontrado('Lançamento');
   const [r] = await c.env.DB.batch([
     c.env.DB.prepare('UPDATE cash_movements SET descricao = ? WHERE id = ?').bind(descricao, id),
     auditoria(c, 'editar_descricao', 'cash_movements', id, { descricao }),
@@ -221,33 +228,35 @@ rotasFinanceiro.get('/financeiro/lancamentos', async c => {
   const ate = c.req.query('ate') || hoje();
   if (!zData.safeParse(de).success || !zData.safeParse(ate).success) throw new ErroApp(422, 'dados_invalidos', 'Período inválido.');
   const tipo = c.req.query('tipo');
+  const un = filtroUnidade(c, 'm.unit_id');
   const { results } = await c.env.DB.prepare(
     `SELECT m.id, m.data, m.tipo, m.natureza, m.valor_centavos, m.descricao, m.estorno_de, m.order_id, m.criado_em,
        p.nome AS forma, p.eh_credito_cliente, fc.nome AS categoria, o.numero AS os_numero, cl.nome AS cliente, u.nome AS usuario,
+       (SELECT sigla FROM units WHERE id = m.unit_id) AS unidade_sigla,
        (SELECT e.id FROM cash_movements e WHERE e.estorno_de = m.id) AS estornado_por
      FROM cash_movements m JOIN payment_methods p ON p.id = m.forma_id JOIN finance_categories fc ON fc.id = m.categoria_id
      LEFT JOIN orders o ON o.id = m.order_id LEFT JOIN clients cl ON cl.id = m.client_id LEFT JOIN users u ON u.id = m.criado_por
-     WHERE m.data BETWEEN ? AND ? ${tipo === 'entrada' || tipo === 'saida' ? 'AND m.tipo = ?' : ''}
+     WHERE m.data BETWEEN ? AND ? AND ${un.sql} ${tipo === 'entrada' || tipo === 'saida' ? 'AND m.tipo = ?' : ''}
      ORDER BY m.criado_em DESC LIMIT 1000`,
-  ).bind(de, ate, ...(tipo === 'entrada' || tipo === 'saida' ? [tipo] : [])).all();
+  ).bind(de, ate, ...un.binds, ...(tipo === 'entrada' || tipo === 'saida' ? [tipo] : [])).all();
   return c.json({ lancamentos: results });
 });
 
 /* ---------------------------------------------------------------------------
  * Caixa do dia
  * ------------------------------------------------------------------------- */
-export async function resumoCaixa(db: D1Database, data: string) {
+export async function resumoCaixa(db: D1Database, data: string, unitId: string) {
   const sessao = await db.prepare(
     `SELECT s.*, ua.nome AS aberto_por_nome, uf.nome AS fechado_por_nome FROM cash_sessions s
-     LEFT JOIN users ua ON ua.id = s.aberto_por LEFT JOIN users uf ON uf.id = s.fechado_por WHERE s.data = ?`,
-  ).bind(data).first<Record<string, unknown> & { saldo_inicial_centavos: number; contado_centavos: number | null; fechado_em: string | null }>();
+     LEFT JOIN users ua ON ua.id = s.aberto_por LEFT JOIN users uf ON uf.id = s.fechado_por WHERE s.data = ? AND s.unit_id = ?`,
+  ).bind(data, unitId).first<Record<string, unknown> & { saldo_inicial_centavos: number; contado_centavos: number | null; fechado_em: string | null }>();
   const { results: porForma } = await db.prepare(
     `SELECT p.id, p.nome, p.eh_dinheiro, p.eh_credito_cliente,
        COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.valor_centavos END), 0) AS entradas,
        COALESCE(SUM(CASE WHEN m.tipo = 'saida' THEN m.valor_centavos END), 0) AS saidas
-     FROM payment_methods p LEFT JOIN cash_movements m ON m.forma_id = p.id AND m.data = ?
+     FROM payment_methods p LEFT JOIN cash_movements m ON m.forma_id = p.id AND m.data = ? AND m.unit_id = ?
      GROUP BY p.id HAVING entradas > 0 OR saidas > 0 OR p.eh_dinheiro = 1 ORDER BY p.ordem`,
-  ).bind(data).all<{ id: string; nome: string; eh_dinheiro: number; eh_credito_cliente: number; entradas: number; saidas: number }>();
+  ).bind(data, unitId).all<{ id: string; nome: string; eh_dinheiro: number; eh_credito_cliente: number; entradas: number; saidas: number }>();
   const dinheiroNovo = porForma.filter(f => !f.eh_credito_cliente);
   const entradas = dinheiroNovo.reduce((s, f) => s + f.entradas, 0);
   const saidas = dinheiroNovo.reduce((s, f) => s + f.saidas, 0);
@@ -264,13 +273,21 @@ rotasFinanceiro.get('/caixa', async c => {
   exigir(c, 'financeiro.ver');
   const data = c.req.query('data') || hoje();
   if (!zData.safeParse(data).success) throw new ErroApp(422, 'dados_invalidos', 'Data inválida.');
-  const resumo = await resumoCaixa(c.env.DB, data);
+  const unit = c.get('unidade');
+  if (!unit) {
+    // Visão "todas as unidades": um resumo por caixa.
+    const { results: uns } = await c.env.DB.prepare(`SELECT id, nome, sigla FROM units WHERE id IN (${c.get('unidades').map(() => '?').join(',')}) ORDER BY nome`)
+      .bind(...c.get('unidades')).all<{ id: string; nome: string; sigla: string }>();
+    const por_unidade = await Promise.all(uns.map(async x => ({ ...x, ...(await resumoCaixa(c.env.DB, data, x.id)) })));
+    return c.json({ data, por_unidade, hoje: hoje() });
+  }
+  const resumo = await resumoCaixa(c.env.DB, data, unit);
   const { results: lancamentos } = await c.env.DB.prepare(
     `SELECT m.id, m.tipo, m.natureza, m.valor_centavos, m.descricao, m.criado_em, m.order_id, m.estorno_de, p.nome AS forma,
        fc.nome AS categoria, o.numero AS os_numero, u.nome AS usuario, (SELECT e.id FROM cash_movements e WHERE e.estorno_de = m.id) AS estornado_por
      FROM cash_movements m JOIN payment_methods p ON p.id = m.forma_id JOIN finance_categories fc ON fc.id = m.categoria_id
-     LEFT JOIN orders o ON o.id = m.order_id LEFT JOIN users u ON u.id = m.criado_por WHERE m.data = ? ORDER BY m.criado_em DESC`,
-  ).bind(data).all();
+     LEFT JOIN orders o ON o.id = m.order_id LEFT JOIN users u ON u.id = m.criado_por WHERE m.data = ? AND m.unit_id = ? ORDER BY m.criado_em DESC`,
+  ).bind(data, unit).all();
   return c.json({ ...resumo, lancamentos, hoje: hoje() });
 });
 
@@ -278,14 +295,15 @@ rotasFinanceiro.post('/caixa/abrir', async c => {
   exigir(c, 'caixa.operar');
   const d = await lerCorpo(c, z.object({ saldo_inicial_centavos: zCentavos }));
   const id = uuid();
+  const unit = unidadeParaGravar(c);
   try {
     await c.env.DB.batch([
-      c.env.DB.prepare('INSERT INTO cash_sessions (id, data, saldo_inicial_centavos, aberto_em, aberto_por) VALUES (?,?,?,?,?)')
-        .bind(id, hoje(), d.saldo_inicial_centavos, agora(), c.get('usuario').id),
+      c.env.DB.prepare('INSERT INTO cash_sessions (id, data, unit_id, saldo_inicial_centavos, aberto_em, aberto_por) VALUES (?,?,?,?,?,?)')
+        .bind(id, hoje(), unit, d.saldo_inicial_centavos, agora(), c.get('usuario').id),
       auditoria(c, 'abrir', 'cash_sessions', id, d),
     ]);
   } catch (e) {
-    const fechado = await c.env.DB.prepare('SELECT fechado_em FROM cash_sessions WHERE data = ?').bind(hoje()).first<{ fechado_em: string | null }>();
+    const fechado = await c.env.DB.prepare('SELECT fechado_em FROM cash_sessions WHERE data = ? AND unit_id = ?').bind(hoje(), unit).first<{ fechado_em: string | null }>();
     if (fechado?.fechado_em) throw new ErroApp(409, 'caixa_fechado', 'O caixa de hoje já foi fechado. Peça ao administrador para reabrir.');
     if (fechado) return c.json({ ok: true, ja_aberto: true });
     throw traduzirErroBanco(e) ?? e;
@@ -296,23 +314,25 @@ rotasFinanceiro.post('/caixa/abrir', async c => {
 rotasFinanceiro.post('/caixa/fechar', async c => {
   exigir(c, 'caixa.operar');
   const d = await lerCorpo(c, z.object({ contado_centavos: zCentavos, observacoes: z.string().trim().max(500).default('') }));
+  const unit = unidadeParaGravar(c);
   const [r] = await c.env.DB.batch([
-    c.env.DB.prepare('UPDATE cash_sessions SET fechado_em = ?, fechado_por = ?, contado_centavos = ?, observacoes = ? WHERE data = ? AND fechado_em IS NULL')
-      .bind(agora(), c.get('usuario').id, d.contado_centavos, d.observacoes, hoje()),
+    c.env.DB.prepare('UPDATE cash_sessions SET fechado_em = ?, fechado_por = ?, contado_centavos = ?, observacoes = ? WHERE data = ? AND unit_id = ? AND fechado_em IS NULL')
+      .bind(agora(), c.get('usuario').id, d.contado_centavos, d.observacoes, hoje(), unit),
     auditoria(c, 'fechar', 'cash_sessions', hoje(), d),
   ]);
   if (!r.meta.changes) throw new ErroApp(409, 'caixa_nao_aberto', 'Não há caixa aberto hoje.');
-  return c.json(await resumoCaixa(c.env.DB, hoje()));
+  return c.json(await resumoCaixa(c.env.DB, hoje(), unit));
 });
 
 rotasFinanceiro.post('/caixa/reabrir', async c => {
   exigir(c, 'caixa.reabrir');
   const { motivo } = await lerCorpo(c, z.object({ motivo: z.string().trim().min(3, 'Informe o motivo da reabertura.').max(300) }));
-  const ant = await c.env.DB.prepare('SELECT contado_centavos FROM cash_sessions WHERE data = ? AND fechado_em IS NOT NULL').bind(hoje()).first();
+  const unit = unidadeParaGravar(c);
+  const ant = await c.env.DB.prepare('SELECT contado_centavos FROM cash_sessions WHERE data = ? AND unit_id = ? AND fechado_em IS NOT NULL').bind(hoje(), unit).first();
   if (!ant) throw new ErroApp(409, 'caixa_nao_fechado', 'O caixa de hoje não está fechado.');
   await c.env.DB.batch([
-    c.env.DB.prepare('UPDATE cash_sessions SET fechado_em = NULL, fechado_por = NULL, contado_centavos = NULL, reaberto_em = ?, reaberto_por = ? WHERE data = ?')
-      .bind(agora(), c.get('usuario').id, hoje()),
+    c.env.DB.prepare('UPDATE cash_sessions SET fechado_em = NULL, fechado_por = NULL, contado_centavos = NULL, reaberto_em = ?, reaberto_por = ? WHERE data = ? AND unit_id = ?')
+      .bind(agora(), c.get('usuario').id, hoje(), unit),
     auditoria(c, 'reabrir', 'cash_sessions', hoje(), { motivo, contado_anterior: ant.contado_centavos }),
   ]);
   return c.json({ ok: true });
@@ -323,11 +343,13 @@ rotasFinanceiro.post('/caixa/reabrir', async c => {
  * ------------------------------------------------------------------------- */
 rotasFinanceiro.get('/financeiro/receber', async c => {
   exigir(c, 'financeiro.ver');
+  const un = filtroUnidade(c, 'o.unit_id');
   const { results } = await c.env.DB.prepare(
-    `SELECT o.id, o.numero, o.prazo, o.status, c.id AS client_id, c.nome AS cliente, c.telefone, c.whatsapp, t.total, t.pago, (t.total - t.pago) AS saldo
+    `SELECT o.id, o.numero, o.prazo, o.status, c.id AS client_id, c.nome AS cliente, c.telefone, c.whatsapp, t.total, t.pago, (t.total - t.pago) AS saldo,
+       (SELECT sigla FROM units WHERE id = o.unit_id) AS unidade_sigla
      FROM orders o JOIN vw_order_totals t ON t.order_id = o.id JOIN clients c ON c.id = o.client_id
-     WHERE o.status <> 'cancelada' AND t.total - t.pago > 0 ORDER BY (o.status = 'pronta' OR o.status = 'entregue') DESC, o.prazo`,
-  ).all<{ saldo: number }>();
+     WHERE o.status <> 'cancelada' AND t.total - t.pago > 0 AND ${un.sql} ORDER BY (o.status = 'pronta' OR o.status = 'entregue') DESC, o.prazo`,
+  ).bind(...un.binds).all<{ saldo: number }>();
   const { results: creditos } = await c.env.DB.prepare(
     `SELECT c.id, c.nome, SUM(cc.valor_centavos) AS saldo FROM customer_credits cc JOIN clients c ON c.id = cc.client_id
      GROUP BY c.id HAVING saldo > 0 ORDER BY c.nome`,

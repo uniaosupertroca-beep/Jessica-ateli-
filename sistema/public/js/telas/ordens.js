@@ -1,6 +1,6 @@
 import { api, ErroApi, novaChave, sessao } from '../api.js';
 import {
-  $, $$, brl, comBotao, confirmar, dataBR, dataHora, dataSemana, esc, fecharModal, formatarTelefone, modal, nOS, opcoes, pill, pillProd, toast,
+  $, $$, brl, comBotao, confirmar, dataBR, dataHora, dataSemana, esc, fecharModal, formatarTelefone, modal, nOS, opcoes, pill, pillProd, tagUn, toast,
 } from '../ui.js';
 import {
   duracao, FLUXO_OS, STATUS_DE_PRODUCAO, TIPOS_AGENDA, lerQuantidade, lerValor, linkWhatsApp, montarMensagem, MODELOS_MENSAGEM, numeroWhatsApp, situacaoDia, somarDias,
@@ -38,7 +38,7 @@ export async function telaOrdens(el, _p, vivo) {
         ${verValores ? '<th class="r">Total</th><th class="r">Falta pagar</th>' : ''}</tr></thead><tbody>
       ${ordens.map(o => {
         const atrasada = o.prazo < sessao.hoje && !['entregue', 'cancelada'].includes(o.status);
-        return `<tr class="click" data-href="#ordens/${o.id}"><td class="num">${nOS(o.numero)}</td><td>${esc(o.cliente)}</td>
+        return `<tr class="click" data-href="#ordens/${o.id}"><td class="num">${nOS(o.numero)}${tagUn(o.unidade_sigla)}</td><td>${esc(o.cliente)}</td>
           <td class="muted" style="max-width:220px">${esc(o.pecas || '')}</td>
           <td style="${atrasada ? 'color:var(--crit);font-weight:600' : ''}">${dataSemana(o.prazo)}${atrasada ? ' · atrasada' : ''}</td><td>${pill(o.status)}</td>
           ${verValores ? `<td class="r num">${brl(o.total)}</td><td class="r num" style="${o.saldo > 0 ? 'color:var(--warn)' : ''}">${o.saldo > 0 ? brl(o.saldo) : '—'}</td>` : ''}</tr>`;
@@ -133,8 +133,9 @@ function desenhar(ctx) {
   const verValores = sessao.pode('os.financeiro.ver');
   el.innerHTML = `
     <div class="head"><div><a class="btn link" href="#ordens" style="padding-left:0">← Ordens de serviço</a>
-        <h1>${salva ? 'OS ' + nOS(f.numero) : 'Nova ordem de serviço'}</h1>
-        <p>${salva ? `Aberta em ${dataBR(f.aberta_em)} · ${pill(f.status)}` : 'O número é gerado ao salvar.'}</p></div>
+        <h1>${salva ? 'OS ' + nOS(f.numero) + tagUn(os?.unidade_sigla) : 'Nova ordem de serviço'}</h1>
+        <p>${salva ? `Aberta em ${dataBR(f.aberta_em)}${os?.unidade_nome && sessao.unidades.length > 1 ? ' · ' + esc(os.unidade_nome) : ''} · ${pill(f.status)}`
+          : sessao.unidades.length > 1 ? (sessao.unidade ? `Será aberta em <b>${esc(sessao.unidades.find(u => u.id === sessao.unidade)?.nome || '')}</b>. O número é gerado ao salvar.` : '<b>Escolha a unidade no topo da tela antes de salvar.</b>') : 'O número é gerado ao salvar.'}</p></div>
       <div class="row nao-imprimir">${salva ? `<a class="btn" href="#ordens/${f.id}/imprimir">Documentos / PDF</a><a class="btn" href="#ordens/${f.id}/etiquetas">Etiquetas</a>` : ''}
         ${ed ? `<button class="btn pri" data-a="salvar">${salva ? 'Salvar alterações' : 'Salvar OS'}</button>` : ''}</div></div>
     ${salva ? painelStatus(ctx) : ''}

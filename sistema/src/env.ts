@@ -24,5 +24,5 @@ export interface Usuario {
 
 export type AppEnv = {
   Bindings: Env;
-  Variables: { usuario: Usuario; perms: ReadonlySet<string>; sessaoId: string };
+  Variables: { usuario: Usuario; perms: ReadonlySet<string>; sessaoId: string; unidades: string[]; unidade: string | null };
 };

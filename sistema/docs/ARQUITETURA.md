@@ -59,6 +59,14 @@ As regras foram reescritas para funcionar com dados reais. O protótipo continua
 - **LGPD:** há exportação completa dos dados de uma cliente e anonimização, que apaga contato, observações e fotos e mantém os registros financeiros.
 - **Segredos:** só `SETUP_TOKEN`, guardado como secret do Worker. Nenhuma credencial fica no código.
 
+## Unidades (filiais)
+
+- Tabelas `units` e `user_units`; `unit_id` em `orders`, `appointments`, `purchases`, `cash_movements`, `cash_sessions`, `stock_movements` e `payables` (NULL = despesa do grupo).
+- O navegador envia o cabeçalho `X-Unidade`; o middleware `carregarUnidades` (src/lib/unidades.ts) só aceita unidades permitidas à pessoa.
+  Sem unidade escolhida = "todas as permitidas" (leitura); gravações exigem uma unidade (`422 escolha_unidade`).
+- Travas no banco: um caixa por unidade por dia (`UNIQUE(data, unit_id)`), lançamento só no caixa aberto da mesma unidade, estoque não fica negativo na unidade,
+  transferência = dois movimentos ligados por `transferencia_id`.
+
 ## Estrutura
 
 ```

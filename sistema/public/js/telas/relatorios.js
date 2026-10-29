@@ -26,7 +26,7 @@ export async function telaRelatorios(el, _p, vivo) {
   const card = (lbl, val, sub, cor = '') => `<div class="panel stat"><span class="lbl">${lbl}</span><span class="val num" ${cor ? `style="color:${cor}"` : ''}>${val}</span><span class="sub">${sub}</span></div>`;
   const presets = [['mes', 'Este mês', `${hoje.slice(0, 7)}-01`, hoje], ['30', 'Últimos 30 dias', somarDias(hoje, -29), hoje],
     ['90', 'Últimos 90 dias', somarDias(hoje, -89), hoje], ['ano', 'Este ano', `${hoje.slice(0, 4)}-01-01`, hoje]];
-  el.innerHTML = `<div class="head"><div><h1>Relatórios</h1><p>${dataBR(r.de)} a ${dataBR(r.ate)} · comparado com ${dataBR(r.periodo_anterior.de)} a ${dataBR(r.periodo_anterior.ate)}</p></div>
+  el.innerHTML = `<div class="head"><div><h1>Relatórios</h1><p>${sessao.unidades.length > 1 ? `<b>${esc(sessao.unidades.find(u => u.id === sessao.unidade)?.nome || 'Todas as unidades')}</b> · ` : ''}${dataBR(r.de)} a ${dataBR(r.ate)} · comparado com ${dataBR(r.periodo_anterior.de)} a ${dataBR(r.periodo_anterior.ate)}</p></div>
       <div class="row nao-imprimir"><button class="btn" data-csv>Exportar CSV</button><button class="btn" data-imprimir>Imprimir</button></div></div>
     <div class="panel nao-imprimir"><div class="row">${presets.map(([k, l, de, ate]) => `<button class="btn sm ${est.de === de && est.ate === ate ? 'sec' : 'ghost'}" data-de="${de}" data-ate="${ate}">${l}</button>`).join('')}
       <label class="row" style="gap:6px">De <input class="in" type="date" id="r-de" value="${est.de}" style="width:auto"></label>
@@ -43,6 +43,12 @@ export async function telaRelatorios(el, _p, vivo) {
       ${card('Lucro estimado', brl(a.lucro_estimado), a.mao_obra_configurada ? `faturamento − materiais − mão de obra estimada (${brl(a.mao_obra_estimada)})` : 'faturamento − materiais (informe o custo da hora para descontar a mão de obra)')}
       ${card('Resultado de caixa', brl(a.resultado_caixa), 'recebido − despesas (realizado)', a.resultado_caixa >= 0 ? 'var(--ok)' : 'var(--crit)')}
     </div>
+    ${r.por_unidade?.length ? `<div class="panel"><h2>Comparativo entre unidades</h2><div class="tw"><table><thead><tr><th>Unidade</th><th class="r">Faturamento</th><th class="r">OS entregues</th>
+        <th class="r">Ticket médio</th><th class="r">Recebido</th><th class="r">Despesas</th><th class="r">Resultado de caixa</th><th class="r">Lucro estimado</th><th class="r">A receber</th></tr></thead><tbody>
+      ${r.por_unidade.map(u => `<tr><td><b>${esc(u.nome)}</b> <span class="tag-un">${esc(u.sigla)}</span></td><td class="r num">${brl(u.faturamento)}</td><td class="r num">${u.os_entregues}</td>
+        <td class="r num">${brl(u.ticket_medio)}</td><td class="r num">${brl(u.recebido)}</td><td class="r num">${brl(u.despesas)}</td>
+        <td class="r num" style="color:${u.resultado_caixa >= 0 ? 'var(--ok)' : 'var(--crit)'}">${brl(u.resultado_caixa)}</td><td class="r num">${brl(u.lucro_estimado)}</td><td class="r num">${brl(u.a_receber)}</td></tr>`).join('')}
+      </tbody></table></div><p class="ajuda" style="margin:0">Despesas do grupo (sem unidade) entram no caixa da unidade que pagou.</p></div>` : ''}
     <div class="panel"><div class="panel-h"><h2>Evolução mensal</h2><span class="ajuda">últimos 12 meses</span></div><div id="g-mensal"></div>
       <details><summary class="ajuda">Ver em tabela</summary><div class="tw"><table><thead><tr><th>Mês</th><th class="r">Faturamento</th><th class="r">Recebido</th><th class="r">Despesas</th></tr></thead><tbody>
         ${r.mensal.map(x => `<tr><td>${MESES[+x.mes.slice(5) - 1]}/${x.mes.slice(0, 4)}</td><td class="r num">${brl(x.faturamento)}</td><td class="r num">${brl(x.recebido)}</td><td class="r num">${brl(x.despesas)}</td></tr>`).join('')}</tbody></table></div></details></div>

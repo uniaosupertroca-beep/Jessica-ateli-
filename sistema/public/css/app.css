@@ -348,3 +348,11 @@ label.chk input{width:18px;height:18px}
 .logo-atual{max-height:80px;max-width:220px;object-fit:contain;background:repeating-conic-gradient(#f2f2f2 0 25%,#fff 0 50%) 0/16px 16px;border-radius:8px;padding:6px;border:1px solid var(--line)}
 .etiqueta .et-cliente{display:block;font-family:var(--f-body);font-size:12pt;line-height:1.2}
 .etiqueta .et-peca{display:block;font-size:10.5pt;margin:1mm 0}
+
+/* Unidade (filial) escolhida no topo */
+.sel-unidade{flex:0 0 auto}
+.sel-unidade select{min-width:150px;max-width:220px;font-weight:600}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+.tag-un{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:6px;background:var(--accent-soft);color:var(--ink);vertical-align:middle}
+@media (max-width:640px){.barra-topo{flex-wrap:wrap}.sel-unidade{flex:1 1 100%}.sel-unidade select{max-width:none;width:100%}}
+table td.num,table td.r.num{white-space:nowrap}

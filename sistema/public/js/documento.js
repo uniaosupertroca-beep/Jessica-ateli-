@@ -14,7 +14,7 @@ export function cabecalhoDoc(a, titulo, numero, direita = []) {
   const logo = urlLogo(a);
   return `<div class="top doc-topo">
     <div class="doc-marca">${logo ? `<img class="doc-logo" src="${logo}" alt="${esc(a.nome)}">` : ''}
-      <div><h2>${esc(a.nome)}</h2>${a.endereco ? `<div>${esc(a.endereco)}</div>` : ''}
+      <div><h2>${esc(a.nome)}${a.unidade ? ` <span style="font-weight:500;font-size:.75em">· ${esc(a.unidade)}</span>` : ''}</h2>${a.endereco ? `<div>${esc(a.endereco)}</div>` : ''}
         <div>${esc(a.telefone || '')}${a.documento ? ' · ' + esc(a.documento) : ''}</div>
         ${a.doc_cabecalho ? `<div class="doc-extra">${esc(a.doc_cabecalho)}</div>` : ''}</div></div>
     <div style="text-align:right"><div class="doc-titulo">${esc(titulo)}</div>

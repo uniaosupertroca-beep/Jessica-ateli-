@@ -9,6 +9,7 @@ import {
 import { ErroApp } from '../lib/erros';
 import { agora, hoje, ip, lerCorpo, uuid } from '../lib/util';
 import { auditoria } from '../lib/auditoria';
+import { unidadesPermitidas } from '../lib/unidades';
 
 export const rotasAuth = new Hono<AppEnv>();
 
@@ -37,6 +38,7 @@ rotasAuth.post('/configurar', async c => {
      SELECT ?,?,?,?, 'admin', ? WHERE NOT EXISTS (SELECT 1 FROM users)`,
   ).bind(id, d.nome, d.email, await hashSenha(d.senha), agora()).run();
   if (!r.meta.changes) throw new ErroApp(409, 'ja_configurado', 'O sistema já foi configurado.');
+  await c.env.DB.prepare('INSERT OR IGNORE INTO user_units (user_id, unit_id) SELECT ?, id FROM units').bind(id).run();
   await criarSessao(c, id);
   return c.json({ ok: true });
 });
@@ -65,11 +67,10 @@ rotasAuth.post('/sair', async c => {
   return c.json({ ok: true });
 });
 
-rotasAuth.get('/eu', exigirLogin, c => c.json({
-  usuario: c.get('usuario'),
-  permissoes: [...c.get('perms')],
-  hoje: hoje(),
-}));
+rotasAuth.get('/eu', exigirLogin, async c => {
+  const u = c.get('usuario');
+  return c.json({ usuario: u, permissoes: [...c.get('perms')], hoje: hoje(), unidades: await unidadesPermitidas(c.env.DB, u.id, u.papel) });
+});
 
 rotasAuth.post('/senha', exigirLogin, async c => {
   const d = await lerCorpo(c, z.object({ atual: z.string().min(1), nova: z.string() }));

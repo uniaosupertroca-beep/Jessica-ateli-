@@ -21,6 +21,7 @@ export async function api(caminho, { metodo, corpo, form, chave } = {}) {
     body = JSON.stringify(corpo);
   }
   if (chave) headers['Idempotency-Key'] = chave;
+  if (sessao.unidade) headers['X-Unidade'] = sessao.unidade;
   let r;
   try {
     r = await fetch('/api' + caminho, { method: metodo || (body ? 'POST' : 'GET'), headers, body, credentials: 'same-origin' });
@@ -42,8 +43,26 @@ export const sessao = {
   perms: new Set(),
   config: null,
   hoje: null,
+  unidades: [],   // unidades que a pessoa pode usar
+  unidade: null,  // escolhida no topo (null = todas)
   pode(p) { return this.perms.has(p); },
+  /** Nome curto da unidade para mostrar nas listas (só quando há mais de uma). */
+  sigla(id) { return this.unidades.length > 1 ? this.unidades.find(u => u.id === id)?.sigla || '' : ''; },
 };
+
+const CHAVE_UNIDADE = 'atelie-unidade';
+/** Lembra a unidade escolhida neste aparelho; confere se ela ainda é permitida. */
+export function definirUnidades(lista) {
+  sessao.unidades = lista || [];
+  let salva = null;
+  try { salva = localStorage.getItem(CHAVE_UNIDADE); } catch {}
+  if (sessao.unidades.length === 1) sessao.unidade = sessao.unidades[0].id;
+  else sessao.unidade = sessao.unidades.some(u => u.id === salva) ? salva : null;
+}
+export function escolherUnidade(id) {
+  sessao.unidade = id || null;
+  try { id ? localStorage.setItem(CHAVE_UNIDADE, id) : localStorage.removeItem(CHAVE_UNIDADE); } catch {}
+}
 
 export async function carregarConfig() {
   sessao.config = await api('/config');

@@ -14,14 +14,26 @@ const zLogin = z.string().trim().toLowerCase().regex(/^[a-z0-9._-]{3,40}$/, 'Usu
 const zCapacidade = z.number().int().min(0).max(1440).optional();
 const zDias = z.string().regex(/^[0-6]{0,7}$/, 'Dias de trabalho inválidos.').optional();
 
+const zUnidades = z.array(z.string().max(64)).max(50).optional();
+
+/** Confere se as unidades existem e monta os comandos que gravam o vínculo da pessoa. */
+async function vinculos(db: D1Database, userId: string, unidades: string[] | undefined) {
+  if (!unidades) return [];
+  const ids = new Set((await db.prepare('SELECT id FROM units').all<{ id: string }>()).results.map(r => r.id));
+  if (unidades.some(u => !ids.has(u))) throw new ErroApp(422, 'unidade_invalida', 'Unidade inválida.');
+  return [db.prepare('DELETE FROM user_units WHERE user_id = ?').bind(userId),
+    ...unidades.map(u => db.prepare('INSERT INTO user_units (user_id, unit_id) VALUES (?, ?)').bind(userId, u))];
+}
+
 const zPapel = z.enum(['admin', 'atendente', 'costureira'], { error: 'Perfil inválido.' });
 
 rotasUsuarios.get('/', async c => {
   exigir(c, 'usuarios.gerenciar');
   const { results } = await c.env.DB.prepare(
-    'SELECT id, nome, email, login, papel, ativo, trocar_senha, capacidade_min_dia, dias_trabalho, criado_em FROM users ORDER BY ativo DESC, nome',
-  ).all();
-  return c.json({ usuarios: results });
+    `SELECT id, nome, email, login, papel, ativo, trocar_senha, capacidade_min_dia, dias_trabalho, criado_em,
+       (SELECT GROUP_CONCAT(unit_id) FROM user_units WHERE user_id = users.id) AS unidades FROM users ORDER BY ativo DESC, nome`,
+  ).all<Record<string, unknown> & { unidades: string | null }>();
+  return c.json({ usuarios: results.map(u => ({ ...u, unidades: u.unidades ? u.unidades.split(',') : [] })) });
 });
 
 rotasUsuarios.post('/', async c => {
@@ -34,15 +46,19 @@ rotasUsuarios.post('/', async c => {
     senha: z.string(),
     capacidade_min_dia: zCapacidade,
     dias_trabalho: zDias,
+    unidades: zUnidades,
   }));
   validarSenhaNova(d.senha);
   const id = uuid();
+  // Sem unidade informada, a pessoa entra na unidade que está aberta na tela (ou em todas, se for "todas").
+  const unidades = d.unidades?.length ? d.unidades : c.get('unidade') ? [c.get('unidade')!] : c.get('unidades');
   await c.env.DB.batch([
     // A senha criada pelo administrador é temporária: a pessoa troca no primeiro acesso.
     c.env.DB.prepare(`INSERT INTO users (id, nome, email, login, senha_hash, papel, trocar_senha, capacidade_min_dia, dias_trabalho, criado_em)
       VALUES (?,?,?,?,?,?,1,?,?,?)`)
       .bind(id, d.nome, d.email, d.login ?? null, await hashSenha(d.senha), d.papel, d.capacidade_min_dia ?? 0, d.dias_trabalho ?? '12345', agora()),
-    auditoria(c, 'criar', 'users', id, { nome: d.nome, email: d.email, papel: d.papel }),
+    ...(await vinculos(c.env.DB, id, unidades)),
+    auditoria(c, 'criar', 'users', id, { nome: d.nome, email: d.email, papel: d.papel, unidades }),
   ]);
   return c.json({ id }, 201);
 });
@@ -58,7 +74,9 @@ rotasUsuarios.patch('/:id', async c => {
     senha: z.string().optional(),
     capacidade_min_dia: zCapacidade,
     dias_trabalho: zDias,
+    unidades: zUnidades,
   }));
+  if (d.unidades && !d.unidades.length) throw new ErroApp(422, 'unidade_invalida', 'Escolha pelo menos uma unidade.');
   const atual = await c.env.DB.prepare('SELECT id, papel, ativo FROM users WHERE id = ?').bind(id).first<{ papel: string; ativo: number }>();
   if (!atual) throw naoEncontrado('Usuário');
   const deixaDeSerAdmin = atual.papel === 'admin' && atual.ativo === 1 && ((d.papel && d.papel !== 'admin') || d.ativo === false);
@@ -76,7 +94,8 @@ rotasUsuarios.patch('/:id', async c => {
     ).bind(d.nome ?? null, d.papel ?? null, d.ativo === undefined ? null : d.ativo ? 1 : 0,
       d.senha ? await hashSenha(d.senha) : null, d.senha ? 1 : 0, d.login !== undefined ? 1 : 0, d.login ?? null,
       d.capacidade_min_dia ?? null, d.dias_trabalho ?? null, agora(), id),
-    auditoria(c, 'editar', 'users', id, { nome: d.nome, papel: d.papel, ativo: d.ativo, senha_alterada: !!d.senha }),
+    ...(await vinculos(c.env.DB, id, d.unidades)),
+    auditoria(c, 'editar', 'users', id, { nome: d.nome, papel: d.papel, ativo: d.ativo, senha_alterada: !!d.senha, unidades: d.unidades }),
   ];
   // Desativar, trocar perfil ou redefinir senha derruba as sessões abertas dessa pessoa.
   if (d.ativo === false || d.papel || d.senha) stmts.push(c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id));

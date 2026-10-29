@@ -20,6 +20,88 @@ export async function lerConfigAtelie(db: D1Database) {
   return { ...resto, logo_versao: logo_key ? logo_key.split('/').pop()!.split('.')[0] : null };
 }
 
+export type DadosUnidade = { id: string; nome: string; sigla: string; endereco: string; telefone: string; documento: string; capacidade_diaria: number;
+  limite_quase_cheio: number; capacidade_provas_dia: number; horario_inicio: string; horario_fim: string; ativo: number };
+
+export async function lerUnidade(db: D1Database, id: string) {
+  return db.prepare('SELECT * FROM units WHERE id = ?').bind(id).first<DadosUnidade>();
+}
+
+/**
+ * Capacidade usada na agenda: da unidade escolhida, ou a soma das unidades (visão "todas").
+ */
+export async function capacidadeAgenda(db: D1Database, ids: string[]) {
+  const { results } = await db.prepare(`SELECT * FROM units WHERE id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all<DadosUnidade>();
+  if (results.length === 1) return results[0];
+  return {
+    capacidade_diaria: results.reduce((s, u) => s + u.capacidade_diaria, 0) || 1,
+    limite_quase_cheio: results.reduce((s, u) => s + u.limite_quase_cheio, 0) || 1,
+    capacidade_provas_dia: results.reduce((s, u) => s + u.capacidade_provas_dia, 0) || 1,
+    horario_inicio: results.map(u => u.horario_inicio).sort()[0] ?? '09:00',
+    horario_fim: results.map(u => u.horario_fim).sort().pop() ?? '18:00',
+  };
+}
+
+/* ---------- unidades (filiais) ---------- */
+const zUnidade = z.object({
+  nome: z.string().trim().min(2, 'Informe o nome da unidade.').max(80),
+  sigla: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{2,5}$/, 'Sigla de 2 a 5 letras ou números (ex.: CEN).'),
+  endereco: z.string().trim().max(200).default(''),
+  telefone: z.string().trim().max(40).default(''),
+  documento: z.string().trim().max(30).default(''),
+  capacidade_diaria: z.number().int().min(1).max(200).default(6),
+  limite_quase_cheio: z.number().int().min(1).max(200).default(5),
+  capacidade_provas_dia: z.number().int().min(1).max(100).default(8),
+  horario_inicio: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Horário inválido.').default('09:00'),
+  horario_fim: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Horário inválido.').default('18:00'),
+  ativo: z.boolean().default(true),
+}).refine(x => x.limite_quase_cheio <= x.capacidade_diaria, { message: '"Quase cheio" não pode ser maior que a capacidade.', path: ['limite_quase_cheio'] })
+  .refine(x => x.horario_fim > x.horario_inicio, { message: 'O horário de fechamento deve ser depois da abertura.', path: ['horario_fim'] });
+
+function erroNomeUnidade(e: unknown): never {
+  if (/UNIQUE constraint failed: units\.(nome|sigla)/.test(String(e))) throw new ErroApp(409, 'unidade_em_uso', 'Já existe unidade com este nome ou sigla.');
+  throw e;
+}
+
+rotasConfig.post('/unidades', async c => {
+  exigir(c, 'config.editar');
+  const d = await lerCorpo(c, zUnidade);
+  const id = uuid();
+  try {
+    await c.env.DB.batch([
+      c.env.DB.prepare(`INSERT INTO units (id, nome, sigla, endereco, telefone, documento, capacidade_diaria, limite_quase_cheio, capacidade_provas_dia,
+          horario_inicio, horario_fim, ativo, criado_em) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .bind(id, d.nome, d.sigla, d.endereco, d.telefone, d.documento, d.capacidade_diaria, d.limite_quase_cheio, d.capacidade_provas_dia,
+          d.horario_inicio, d.horario_fim, d.ativo ? 1 : 0, agora()),
+      // Administradoras já enxergam todas; o vínculo deixa a lista de equipe coerente.
+      c.env.DB.prepare("INSERT OR IGNORE INTO user_units (user_id, unit_id) SELECT id, ? FROM users WHERE papel = 'admin'").bind(id),
+      auditoria(c, 'criar', 'units', id, d),
+    ]);
+  } catch (e) { erroNomeUnidade(e); }
+  return c.json({ id }, 201);
+});
+
+rotasConfig.put('/unidades/:id', async c => {
+  exigir(c, 'config.editar');
+  const id = c.req.param('id');
+  const d = await lerCorpo(c, zUnidade);
+  if (!d.ativo) {
+    const n = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM units WHERE ativo = 1 AND id <> ?').bind(id).first<{ n: number }>();
+    if (!n?.n) throw new ErroApp(409, 'ultima_unidade', 'É preciso manter pelo menos uma unidade ativa.');
+  }
+  try {
+    const [r] = await c.env.DB.batch([
+      c.env.DB.prepare(`UPDATE units SET nome=?, sigla=?, endereco=?, telefone=?, documento=?, capacidade_diaria=?, limite_quase_cheio=?, capacidade_provas_dia=?,
+          horario_inicio=?, horario_fim=?, ativo=?, atualizado_em=? WHERE id = ?`)
+        .bind(d.nome, d.sigla, d.endereco, d.telefone, d.documento, d.capacidade_diaria, d.limite_quase_cheio, d.capacidade_provas_dia,
+          d.horario_inicio, d.horario_fim, d.ativo ? 1 : 0, agora(), id),
+      auditoria(c, 'editar', 'units', id, d),
+    ]);
+    if (!r.meta.changes) throw naoEncontrado('Unidade');
+  } catch (e) { erroNomeUnidade(e); }
+  return c.json({ ok: true });
+});
+
 /* ---------- logo do ateliê (guardado no R2 privado; só quem está logado vê) ---------- */
 const TIPOS_LOGO: Array<[(b: Uint8Array) => boolean, string, string]> = [
   [b => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47, 'image/png', 'png'],
@@ -95,7 +177,9 @@ rotasConfig.patch('/documentos', async c => {
 rotasConfig.get('/', async c => {
   const db = c.env.DB;
   const verValores = pode(c, 'os.financeiro.ver');
-  const [atelie, formas, catsFin, campos, catsServ, servicos, usuarios] = await Promise.all([
+  const [unidades, atelie, formas, catsFin, campos, catsServ, servicos, usuarios] = await Promise.all([
+    pode(c, 'config.editar') ? db.prepare('SELECT * FROM units ORDER BY ativo DESC, nome').all() : db.prepare(
+      `SELECT * FROM units WHERE id IN (${c.get('unidades').map(() => '?').join(',')}) ORDER BY nome`).bind(...c.get('unidades')).all(),
     lerConfigAtelie(db),
     db.prepare('SELECT id, nome, eh_dinheiro, eh_credito_cliente, ativo FROM payment_methods ORDER BY ordem, nome').all(),
     db.prepare('SELECT id, nome, tipo, sistema, ativo FROM finance_categories ORDER BY tipo, nome').all(),
@@ -103,12 +187,14 @@ rotasConfig.get('/', async c => {
     db.prepare('SELECT id, nome, ordem, ativo FROM service_categories ORDER BY ordem, nome').all(),
     db.prepare(`SELECT id, categoria_id, nome, descricao, unidade, preco_centavos, tempo_min, custo_mao_obra_centavos, ativo
                 FROM service_catalog ORDER BY nome`).all(),
-    db.prepare("SELECT id, nome, papel, capacidade_min_dia FROM users WHERE ativo = 1 ORDER BY nome").all(),
+    db.prepare(`SELECT id, nome, papel, capacidade_min_dia, (SELECT GROUP_CONCAT(unit_id) FROM user_units WHERE user_id = users.id) AS unidades
+                FROM users WHERE ativo = 1 ORDER BY nome`).all<Record<string, unknown> & { unidades: string | null }>(),
   ]);
   const serv = verValores ? servicos.results : servicos.results.map(s => ({ ...s, preco_centavos: undefined, custo_mao_obra_centavos: undefined }));
   return c.json({
-    atelie, formas_pagamento: formas.results, categorias_financeiras: catsFin.results, campos_medida: campos.results,
-    categorias_servico: catsServ.results, servicos: serv, usuarios: usuarios.results,
+    unidades: unidades.results, atelie, formas_pagamento: formas.results, categorias_financeiras: catsFin.results, campos_medida: campos.results,
+    categorias_servico: catsServ.results, servicos: serv,
+    usuarios: usuarios.results.map(u => ({ ...u, unidades: u.unidades ? u.unidades.split(',') : [] })),
   });
 });
 

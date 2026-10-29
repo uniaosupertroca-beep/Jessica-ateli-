@@ -1,4 +1,4 @@
-import { api, carregarConfig, sessao } from '../api.js';
+import { api, carregarConfig, definirUnidades, sessao } from '../api.js';
 import { $, brl, dataBR, dataHora, esc, modal, opcoes, toast } from '../ui.js';
 import { duracao, lerValor, valorParaCampo } from '../regras.js';
 import { cabecalhoDoc, estiloDoc, urlLogo } from '../documento.js';
@@ -8,6 +8,7 @@ const diasTexto = d => ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'].filter
 const ABAS = [
   ['conta', 'Minha conta', () => true],
   ['atelie', 'Ateliê', () => sessao.pode('config.editar')],
+  ['unidades', 'Unidades', () => sessao.pode('config.editar')],
   ['documentos', 'Documentos e logo', () => sessao.pode('config.editar')],
   ['cadastros', 'Pagamentos e medidas', () => sessao.pode('config.editar')],
   ['usuarios', 'Equipe', () => sessao.pode('usuarios.gerenciar')],
@@ -26,7 +27,7 @@ export async function telaConfig(el) {
     el.innerHTML = `<div class="head"><div><h1>${abas.length > 1 ? 'Configurações' : 'Minha conta'}</h1><p>As mudanças valem na hora para todo o sistema.</p></div></div>
       ${abas.length > 1 ? `<div class="tabs">${abas.map(([k, l]) => `<button class="${aba === k ? 'on' : ''}" data-aba="${k}">${l}</button>`).join('')}</div>` : ''}<div id="cfg"></div>`;
     const alvo = $('#cfg', el);
-    await { conta: abaConta, atelie: abaAtelie, documentos: abaDocumentos, cadastros: abaCadastros, usuarios: abaUsuarios, auditoria: abaAuditoria, backup: abaBackup }[aba](alvo, desenhar);
+    await { conta: abaConta, atelie: abaAtelie, unidades: abaUnidades, documentos: abaDocumentos, cadastros: abaCadastros, usuarios: abaUsuarios, auditoria: abaAuditoria, backup: abaBackup }[aba](alvo, desenhar);
   };
   el.onclick = e => {
     const b = e.target.closest('[data-aba]');
@@ -55,11 +56,8 @@ function abaAtelie(alvo, depois) {
   const campo = (k, l, tipo = 'text') => `<div class="field"><label for="a-${k}">${l}</label><input class="in" id="a-${k}" type="${tipo}" ${tipo === 'number' ? 'min="0" step="any"' : ''} value="${esc(a[k])}"></div>`;
   alvo.innerHTML = `<div class="grid g2" style="margin-top:12px"><div class="panel"><h2>Dados impressos na OS</h2>
       ${campo('nome', 'Nome do ateliê')}${campo('telefone', 'Telefone')}${campo('endereco', 'Endereço')}${campo('documento', 'CPF ou CNPJ (opcional)')}
-      <div class="field"><label for="a-rodape_os">Texto no rodapé da OS</label><textarea class="in" id="a-rodape_os">${esc(a.rodape_os)}</textarea></div></div>
-    <div class="panel"><h2>Agenda</h2>${campo('capacidade_diaria', 'Entregas por dia (lotado a partir de)', 'number')}${campo('limite_quase_cheio', 'Mostrar "quase cheio" a partir de', 'number')}
-      ${campo('capacidade_provas_dia', 'Provas por dia (no máximo)', 'number')}
-      <div class="grid g2" style="gap:10px">${campo('horario_inicio', 'Abre às', 'time')}${campo('horario_fim', 'Fecha às', 'time')}</div>
-      <p class="ajuda" style="margin:0">Dia lotado não bloqueia: o sistema avisa e pede confirmação para encaixar. A capacidade em horas vem da Equipe.</p></div>
+      <div class="field"><label for="a-rodape_os">Texto no rodapé da OS</label><textarea class="in" id="a-rodape_os">${esc(a.rodape_os)}</textarea></div>
+      <p class="ajuda" style="margin:0">Endereço, telefone e documento de cada filial ficam na aba <b>Unidades</b> e substituem estes na impressão das OS da filial.</p></div>
     <div class="panel"><h2>Precificação (calculadora)</h2>
       <div class="field"><label for="a-hora">Custo da hora de trabalho (R$)</label><input class="in num" id="a-hora" inputmode="decimal" value="${valorParaCampo(a.custo_hora_centavos)}"></div>
       ${campo('despesas_indiretas_pct', 'Despesas indiretas (%) — aluguel, luz, máquinas', 'number')}${campo('margem_pct', 'Margem desejada (%)', 'number')}
@@ -69,8 +67,9 @@ function abaAtelie(alvo, depois) {
     const v = k => $(`#a-${k}`, alvo).value.trim();
     try {
       await api('/config/atelie', { metodo: 'PATCH', corpo: { nome: v('nome'), telefone: v('telefone'), endereco: v('endereco'), documento: v('documento'), rodape_os: v('rodape_os'),
-        capacidade_diaria: Number(v('capacidade_diaria')), limite_quase_cheio: Number(v('limite_quase_cheio')),
-        capacidade_provas_dia: Number(v('capacidade_provas_dia')), horario_inicio: v('horario_inicio'), horario_fim: v('horario_fim'),
+        // capacidade e horários agora ficam em cada unidade (aba Unidades); aqui só se preserva o que já existe
+        capacidade_diaria: a.capacidade_diaria, limite_quase_cheio: a.limite_quase_cheio,
+        capacidade_provas_dia: a.capacidade_provas_dia, horario_inicio: a.horario_inicio, horario_fim: a.horario_fim,
         custo_hora_centavos: lerValor($('#a-hora', alvo).value || '0') ?? 0,
         despesas_indiretas_pct: Number(v('despesas_indiretas_pct').replace(',', '.')) || 0, margem_pct: Number(v('margem_pct').replace(',', '.')) || 0 } });
       toast('Dados do ateliê salvos.');
@@ -112,14 +111,63 @@ function abaCadastros(alvo, depois) {
   };
 }
 
+function abaUnidades(alvo, depois) {
+  const lista = sessao.config.unidades || [];
+  alvo.innerHTML = `<div class="panel" style="margin-top:12px"><div class="panel-h"><h2>Unidades (filiais)</h2><button class="btn pri sm" data-nova>+ Nova unidade</button></div>
+    <p class="ajuda" style="margin:0">Clientes, medidas, serviços e cadastro de materiais são compartilhados. Cada unidade tem suas OS, caixa, saldo de estoque, agenda e equipe.
+      A numeração das OS é única para o ateliê todo; a sigla aparece ao lado do número.</p>
+    <div class="tw"><table><thead><tr><th>Unidade</th><th>Sigla</th><th>Endereço</th><th>Telefone</th><th class="r">Entregas/dia</th><th class="r">Provas/dia</th><th>Horário</th><th></th></tr></thead><tbody>
+      ${lista.map(u => `<tr style="${u.ativo ? '' : 'opacity:.5'}"><td><b>${esc(u.nome)}</b>${u.ativo ? '' : ' <span class="pill">inativa</span>'}</td><td><span class="tag-un">${esc(u.sigla)}</span></td>
+        <td>${esc(u.endereco || '—')}</td><td>${esc(u.telefone || '—')}</td><td class="r num">${u.capacidade_diaria}</td><td class="r num">${u.capacidade_provas_dia}</td>
+        <td>${esc(u.horario_inicio)}–${esc(u.horario_fim)}</td><td class="r"><button class="btn sm" data-ed="${esc(u.id)}">Editar</button></td></tr>`).join('')}</tbody></table></div></div>`;
+  const form = u => modal({
+    title: u ? `Editar unidade ${u.nome}` : 'Nova unidade',
+    body: `<div class="grid g2" style="gap:12px">
+      <div class="field"><label class="req" for="un-nome">Nome</label><input class="in" id="un-nome" value="${esc(u?.nome || '')}" placeholder="ex.: Filial Centro"></div>
+      <div class="field"><label class="req" for="un-sigla">Sigla (2 a 5 letras)</label><input class="in" id="un-sigla" maxlength="5" style="text-transform:uppercase" value="${esc(u?.sigla || '')}" placeholder="ex.: CEN"></div>
+      <div class="field" style="grid-column:1/-1"><label for="un-endereco">Endereço (sai na OS)</label><input class="in" id="un-endereco" value="${esc(u?.endereco || '')}"></div>
+      <div class="field"><label for="un-telefone">Telefone</label><input class="in" id="un-telefone" value="${esc(u?.telefone || '')}"></div>
+      <div class="field"><label for="un-documento">CNPJ (opcional)</label><input class="in" id="un-documento" value="${esc(u?.documento || '')}"></div>
+      <div class="field"><label for="un-cap">Entregas por dia (lotado a partir de)</label><input class="in num" id="un-cap" type="number" min="1" value="${u?.capacidade_diaria ?? 6}"></div>
+      <div class="field"><label for="un-quase">"Quase cheio" a partir de</label><input class="in num" id="un-quase" type="number" min="1" value="${u?.limite_quase_cheio ?? 5}"></div>
+      <div class="field"><label for="un-provas">Provas por dia (no máximo)</label><input class="in num" id="un-provas" type="number" min="1" value="${u?.capacidade_provas_dia ?? 8}"></div>
+      <div class="grid g2" style="gap:10px"><div class="field"><label for="un-ini">Abre às</label><input class="in" id="un-ini" type="time" value="${esc(u?.horario_inicio || '09:00')}"></div>
+        <div class="field"><label for="un-fim">Fecha às</label><input class="in" id="un-fim" type="time" value="${esc(u?.horario_fim || '18:00')}"></div></div>
+      ${u ? `<label class="chk"><input type="checkbox" id="un-ativo" ${u.ativo ? 'checked' : ''}> Unidade ativa</label>` : ''}</div>
+      <p class="ajuda">Dia lotado não bloqueia: o sistema avisa e pede confirmação para encaixar. A capacidade em horas vem da Equipe ligada à unidade.</p>`,
+    actions: [{ label: 'Voltar' }, { label: 'Salvar', cls: 'pri', fn: async m => {
+      const v = k => $(`#un-${k}`, m).value.trim();
+      const corpo = { nome: v('nome'), sigla: v('sigla'), endereco: v('endereco'), telefone: v('telefone'), documento: v('documento'),
+        capacidade_diaria: Number(v('cap')), limite_quase_cheio: Number(v('quase')), capacidade_provas_dia: Number(v('provas')),
+        horario_inicio: v('ini'), horario_fim: v('fim'), ativo: u ? $('#un-ativo', m).checked : true };
+      try {
+        if (u) await api(`/config/unidades/${u.id}`, { metodo: 'PUT', corpo });
+        else await api('/config/unidades', { corpo });
+        const eu = await api('/auth/eu');
+        definirUnidades(eu.unidades);
+      } catch (e) { toast(e.message, true); return false; }
+      toast(u ? 'Unidade atualizada.' : 'Unidade criada. Ligue a equipe a ela na aba Equipe.');
+      window.dispatchEvent(new CustomEvent('unidade-trocada'));
+    } }],
+  });
+  alvo.onclick = e => {
+    if (e.target.closest('[data-nova]')) form(null);
+    const ed = e.target.closest('[data-ed]');
+    if (ed) form(lista.find(u => u.id === ed.dataset.ed));
+  };
+}
+
 async function abaUsuarios(alvo, depois) {
   const { usuarios } = await api('/usuarios');
   const PAP = { admin: 'Administrador', atendente: 'Atendente', costureira: 'Costureira' };
+  const todasUn = (sessao.config.unidades || []).filter(x => x.ativo);
+  const multi = todasUn.length > 1;
+  const siglaDe = id => (sessao.config.unidades || []).find(x => x.id === id)?.sigla || '?';
   alvo.innerHTML = `<div class="panel" style="margin-top:12px"><div class="panel-h"><h2>Equipe</h2><button class="btn pri sm" data-novo>+ Nova pessoa</button></div>
     <p class="ajuda" style="margin:0"><b>Administrador:</b> tudo. <b>Atendente:</b> clientes, OS, recebimentos e caixa (sem alterar preço, estornar ou configurar).
       <b>Costureira:</b> vê as peças atribuídas a ela e atualiza a produção, sem valores.</p>
-    <div class="tw"><table><thead><tr><th>Nome</th><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Produção/dia</th><th>Desde</th><th></th></tr></thead><tbody>
-      ${usuarios.map(u => `<tr style="${u.ativo ? '' : 'opacity:.5'}"><td>${esc(u.nome)}${u.trocar_senha ? ' <span class="pill p-warn">senha inicial</span>' : ''}</td><td>${esc(u.login || '—')}</td><td>${esc(u.email)}</td><td>${PAP[u.papel]}</td><td>${u.capacidade_min_dia ? duracao(u.capacidade_min_dia) + ' · ' + diasTexto(u.dias_trabalho) : '—'}</td><td>${dataBR(u.criado_em)}</td>
+    <div class="tw"><table><thead><tr><th>Nome</th><th>Usuário</th><th>E-mail</th><th>Perfil</th>${multi ? '<th>Unidades</th>' : ''}<th>Produção/dia</th><th>Desde</th><th></th></tr></thead><tbody>
+      ${usuarios.map(u => `<tr style="${u.ativo ? '' : 'opacity:.5'}"><td>${esc(u.nome)}${u.trocar_senha ? ' <span class="pill p-warn">senha inicial</span>' : ''}</td><td>${esc(u.login || '—')}</td><td>${esc(u.email)}</td><td>${PAP[u.papel]}</td>${multi ? `<td>${u.papel === 'admin' ? '<span class="muted">todas</span>' : (u.unidades || []).map(id => `<span class="tag-un">${esc(siglaDe(id))}</span>`).join(' ') || '<span class="pill p-warn">nenhuma</span>'}</td>` : ''}<td>${u.capacidade_min_dia ? duracao(u.capacidade_min_dia) + ' · ' + diasTexto(u.dias_trabalho) : '—'}</td><td>${dataBR(u.criado_em)}</td>
         <td class="r"><button class="btn sm" data-ed="${u.id}">Editar</button></td></tr>`).join('')}</tbody></table></div></div>`;
   const form = u => modal({
     title: u ? 'Editar pessoa' : 'Nova pessoa da equipe',
@@ -132,15 +180,19 @@ async function abaUsuarios(alvo, depois) {
       <div class="field"><label for="u-cap">Horas de produção por dia (0 = não produz)</label><input class="in num" id="u-cap" inputmode="decimal" value="${u ? String(u.capacidade_min_dia / 60).replace('.', ',') : '0'}"></div>
       <fieldset class="field" style="border:none;padding:0;margin:0"><legend class="ajuda" style="margin-bottom:6px">Dias de trabalho</legend><div class="row">
         ${['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'].map((d, i) => `<label class="chk"><input type="checkbox" data-dia="${i}" ${(u?.dias_trabalho ?? '12345').includes(String(i)) ? 'checked' : ''}> ${d}</label>`).join('')}</div></fieldset>
+      ${multi ? `<fieldset class="field" style="border:none;padding:0;margin:0"><legend class="ajuda" style="margin-bottom:6px">Unidades em que trabalha (administrador vê todas)</legend><div class="row">
+        ${todasUn.map(x => `<label class="chk"><input type="checkbox" data-un="${esc(x.id)}" ${(u ? (u.unidades || []).includes(x.id) : (!sessao.unidade || sessao.unidade === x.id)) ? 'checked' : ''}> ${esc(x.nome)}</label>`).join('')}</div></fieldset>` : ''}
       ${u ? `<label class="chk"><input type="checkbox" id="u-ativo" ${u.ativo ? 'checked' : ''}> Acesso ativo</label>` : ''}</div>`,
     actions: [{ label: 'Voltar' }, { label: 'Salvar', cls: 'pri', fn: async m => {
+      const unidades = multi ? [...m.querySelectorAll('[data-un]')].filter(x => x.checked).map(x => x.dataset.un) : undefined;
+      if (multi && !unidades.length && $('#u-papel', m).value !== 'admin') { toast('Marque pelo menos uma unidade.', true); return false; }
       const senha = $('#u-senha', m).value;
       try {
         const login = $('#u-login', m).value.trim();
         const capacidade_min_dia = Math.round((Number($('#u-cap', m).value.replace(',', '.')) || 0) * 60);
         const dias_trabalho = [...m.querySelectorAll('[data-dia]')].filter(x => x.checked).map(x => x.dataset.dia).join('');
-        if (u) await api(`/usuarios/${u.id}`, { metodo: 'PATCH', corpo: { nome: $('#u-nome', m).value.trim(), papel: $('#u-papel', m).value, ativo: $('#u-ativo', m).checked, login, capacidade_min_dia, dias_trabalho, ...(senha && { senha }) } });
-        else await api('/usuarios', { corpo: { nome: $('#u-nome', m).value.trim(), email: $('#u-email', m).value.trim(), login, papel: $('#u-papel', m).value, senha, capacidade_min_dia, dias_trabalho } });
+        if (u) await api(`/usuarios/${u.id}`, { metodo: 'PATCH', corpo: { nome: $('#u-nome', m).value.trim(), papel: $('#u-papel', m).value, ativo: $('#u-ativo', m).checked, login, capacidade_min_dia, dias_trabalho, ...(unidades && { unidades }), ...(senha && { senha }) } });
+        else await api('/usuarios', { corpo: { nome: $('#u-nome', m).value.trim(), email: $('#u-email', m).value.trim(), login, papel: $('#u-papel', m).value, senha, capacidade_min_dia, dias_trabalho, ...(unidades && { unidades }) } });
       } catch (e) { toast(e.message, true); return false; }
       toast('Equipe atualizada.');
       depois();

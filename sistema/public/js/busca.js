@@ -1,15 +1,29 @@
 // Barra do topo: pesquisa geral (clientes, OS, peças e materiais).
-import { api } from './api.js';
+import { api, escolherUnidade, sessao } from './api.js';
 import { $, esc, formatarTelefone, nOS, pill } from './ui.js';
 
 let tempo;
+
+/** Escolha da unidade (filial) para quem trabalha em mais de uma. */
+function seletorUnidade() {
+  if (sessao.unidades.length < 2) return '';
+  return `<label class="sel-unidade"><span class="sr-only">Unidade</span>
+    <select class="in" data-unidade aria-label="Unidade">
+      <option value="">Todas as unidades</option>
+      ${sessao.unidades.map(u => `<option value="${esc(u.id)}" ${u.id === sessao.unidade ? 'selected' : ''}>${esc(u.nome)} (${esc(u.sigla)})</option>`).join('')}
+    </select></label>`;
+}
 
 export function barraTopo() {
   const b = document.createElement('div');
   b.className = 'barra-topo nao-imprimir';
   b.innerHTML = `<div class="busca-geral"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input type="search" class="in" placeholder="Pesquisar por cliente, peça, nº da OS ou material" aria-label="Pesquisa geral" autocomplete="off">
-      <div class="busca-res" hidden role="listbox"></div></div>`;
+      <div class="busca-res" hidden role="listbox"></div></div>${seletorUnidade()}`;
+  $('[data-unidade]', b)?.addEventListener('change', e => {
+    escolherUnidade(e.target.value);
+    window.dispatchEvent(new CustomEvent('unidade-trocada'));
+  });
   const inp = $('input', b);
   const res = $('.busca-res', b);
   inp.addEventListener('input', () => {

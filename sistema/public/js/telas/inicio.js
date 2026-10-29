@@ -79,7 +79,7 @@ export async function telaInicio(el) {
     <div class="grid s21">
       <div class="panel"><div class="panel-h"><h2>Recebido nos últimos 30 dias</h2><span class="ajuda">por dia</span></div><div id="g-30d"></div></div>
       <div class="grid" style="gap:16px">
-        ${cartao('Caixa de hoje', brl(f.entradas_hoje - f.saidas_hoje), `${f.caixa_aberto ? 'aberto' : f.caixa_existe ? 'fechado' : 'não aberto'} · entradas ${brl(f.entradas_hoje)}`, 'caixa')}
+        ${cartao('Caixa de hoje', brl(f.entradas_hoje - f.saidas_hoje), `${f.unidades > 1 ? `${f.caixas_abertos} de ${f.unidades} abertos` : f.caixa_aberto ? 'aberto' : f.caixa_existe ? 'fechado' : 'não aberto'} · entradas ${brl(f.entradas_hoje)}`, 'caixa')}
         ${cartao('A receber', brl(f.a_receber), 'saldo de OS não canceladas', 'receber', 'warn', 'var(--warn)')}
       </div></div>` : ''}
     ${lembretes.length ? `<div class="panel"><div class="panel-h"><h2>Lembretes</h2><span class="ajuda">o WhatsApp abre com a mensagem pronta</span></div><div class="list">

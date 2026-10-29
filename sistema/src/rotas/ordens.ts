@@ -5,8 +5,9 @@ import { auditoria } from '../lib/auditoria';
 import { ErroApp, naoEncontrado, semPermissao, traduzirErroBanco } from '../lib/erros';
 import { recalcularStatus } from '../lib/status';
 import { agora, chaveIdempotencia, exigir, hoje, lerCorpo, pode, textoBusca, uuid, zCentavos, zData } from '../lib/util';
-import { lerConfigAtelie } from './config';
+import { lerConfigAtelie, lerUnidade } from './config';
 import { cargaPorDia } from './agenda';
+import { filtroUnidade, unidadeParaGravar } from '../lib/unidades';
 import { duracao, minutosEntre, MODELOS_MENSAGEM, STATUS_DE_PRODUCAO, STATUS_OS, subtotal, transicoesManuais } from '../../public/js/regras.js';
 
 export const rotasOrdens = new Hono<AppEnv>();
@@ -16,10 +17,12 @@ export const rotasOrdens = new Hono<AppEnv>();
  * ------------------------------------------------------------------------- */
 function filtroVisibilidade(c: Context<AppEnv>, alias = 'o') {
   const u = c.get('usuario');
-  if (u.papel !== 'costureira') return { sql: '1 = 1', binds: [] as unknown[] };
+  // Só OS das unidades da pessoa (ou da unidade escolhida no topo).
+  const un = filtroUnidade(c, `${alias}.unit_id`);
+  if (u.papel !== 'costureira') return un;
   return {
-    sql: `(${alias}.responsavel_id = ? OR EXISTS (SELECT 1 FROM order_items vi WHERE vi.order_id = ${alias}.id AND vi.responsavel_id = ?))`,
-    binds: [u.id, u.id] as unknown[],
+    sql: `${un.sql} AND (${alias}.responsavel_id = ? OR EXISTS (SELECT 1 FROM order_items vi WHERE vi.order_id = ${alias}.id AND vi.responsavel_id = ?))`,
+    binds: [...un.binds, u.id, u.id] as unknown[],
   };
 }
 
@@ -72,11 +75,11 @@ rotasOrdens.get('/', async c => {
     }
   }
   const { results } = await c.env.DB.prepare(
-    `SELECT o.id, o.numero, o.aberta_em, o.prazo, o.status, c.id AS client_id, c.nome AS cliente,
+    `SELECT o.id, o.numero, o.aberta_em, o.prazo, o.status, c.id AS client_id, c.nome AS cliente, o.unit_id, un.sigla AS unidade_sigla,
        t.total, t.pago, (t.total - t.pago) AS saldo,
        (SELECT COUNT(*) FROM order_items i WHERE i.order_id = o.id) AS qtd_pecas,
        (SELECT GROUP_CONCAT(peca, ', ') FROM (SELECT peca FROM order_items WHERE order_id = o.id ORDER BY posicao)) AS pecas
-     FROM orders o JOIN clients c ON c.id = o.client_id JOIN vw_order_totals t ON t.order_id = o.id
+     FROM orders o JOIN clients c ON c.id = o.client_id JOIN vw_order_totals t ON t.order_id = o.id JOIN units un ON un.id = o.unit_id
      WHERE ${conds.join(' AND ')} ORDER BY o.prazo, o.numero LIMIT 500`,
   ).bind(...binds).all();
   const verValores = pode(c, 'os.financeiro.ver');
@@ -90,8 +93,8 @@ export async function carregarOS(c: Context<AppEnv>, id: string) {
   const db = c.env.DB;
   const vis = filtroVisibilidade(c);
   const os = await db.prepare(
-    `SELECT o.*, t.soma_itens, t.total, t.pago, (t.total - t.pago) AS saldo, r.nome AS responsavel_nome
-     FROM orders o JOIN vw_order_totals t ON t.order_id = o.id LEFT JOIN users r ON r.id = o.responsavel_id
+    `SELECT o.*, t.soma_itens, t.total, t.pago, (t.total - t.pago) AS saldo, r.nome AS responsavel_nome, un.nome AS unidade_nome, un.sigla AS unidade_sigla
+     FROM orders o JOIN vw_order_totals t ON t.order_id = o.id LEFT JOIN users r ON r.id = o.responsavel_id JOIN units un ON un.id = o.unit_id
      WHERE o.id = ? AND ${vis.sql}`,
   ).bind(id, ...vis.binds).first<Record<string, unknown>>();
   if (!os) throw naoEncontrado('Ordem de serviço');
@@ -182,17 +185,17 @@ const zOS = z.object({
 type DadosOS = z.infer<typeof zOS>;
 
 /** Ocupação do dia (OS não canceladas com esse prazo) e confirmação quando lotado. */
-async function conferirCapacidade(c: Context<AppEnv>, prazo: string, ignorarId: string | null, confirmado?: boolean, tempoNovoMin = 0) {
+async function conferirCapacidade(c: Context<AppEnv>, unitId: string, prazo: string, ignorarId: string | null, confirmado?: boolean, tempoNovoMin = 0) {
   if (confirmado) return;
-  const cfg = await lerConfigAtelie(c.env.DB);
-  const r = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM orders WHERE prazo = ? AND status <> 'cancelada' AND id IS NOT ?")
-    .bind(prazo, ignorarId).first<{ n: number }>();
+  const cfg = (await lerUnidade(c.env.DB, unitId))!;
+  const r = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM orders WHERE prazo = ? AND unit_id = ? AND status <> 'cancelada' AND id IS NOT ?")
+    .bind(prazo, unitId, ignorarId).first<{ n: number }>();
   const n = r?.n ?? 0;
   if (n >= cfg.capacidade_diaria)
     throw new ErroApp(409, 'dia_lotado', `O dia escolhido já tem ${n} de ${cfg.capacidade_diaria} entregas. Confirme para encaixar mesmo assim.`,
       { ocupacao: n, capacidade: cfg.capacidade_diaria });
   // Capacidade por horas de trabalho (quando as profissionais têm capacidade diária cadastrada).
-  const { dias } = await cargaPorDia(c.env.DB, prazo, prazo);
+  const { dias } = await cargaPorDia(c.env.DB, prazo, prazo, [unitId]);
   const dia = dias[prazo];
   if (dia && dia.capacidade_min > 0 && tempoNovoMin > 0 && dia.demanda_min + tempoNovoMin > dia.capacidade_min)
     throw new ErroApp(409, 'dia_lotado', `Para ${prazo.split('-').reverse().join('/')} já estão previstas ${duracao(dia.demanda_min)} de trabalho; com esta OS seriam ${duracao(dia.demanda_min + tempoNovoMin)}, acima da capacidade de ${duracao(dia.capacidade_min)}. Confirme para encaixar mesmo assim.`,
@@ -282,16 +285,17 @@ rotasOrdens.post('/', async c => {
   if (d.prazo < d.aberta_em) throw new ErroApp(422, 'dados_invalidos', 'O prazo não pode ser antes da abertura.');
   const catalogo = await validarReferencias(c, d);
   conferirPrecos(c, d, catalogo, [], 0);
-  await conferirCapacidade(c, d.prazo, null, d.confirmar_lotado, tempoDaOS(d, catalogo));
+  const unitId = unidadeParaGravar(c);
+  await conferirCapacidade(c, unitId, d.prazo, null, d.confirmar_lotado, tempoDaOS(d, catalogo));
   const id = uuid();
   const em = agora();
   const u = c.get('usuario').id;
   try {
     await db.batch([
       db.prepare(
-        `INSERT INTO orders (id, numero, client_id, aberta_em, prazo, responsavel_id, desconto_centavos, observacoes, idempotency_key, criado_em, criado_por)
-         SELECT ?, COALESCE(MAX(numero), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM orders`,
-      ).bind(id, d.client_id, d.aberta_em, d.prazo, d.responsavel_id ?? null, d.desconto_centavos, d.observacoes, chave, em, u),
+        `INSERT INTO orders (id, numero, client_id, aberta_em, prazo, responsavel_id, desconto_centavos, observacoes, idempotency_key, criado_em, criado_por, unit_id)
+         SELECT ?, COALESCE(MAX(numero), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM orders`,
+      ).bind(id, d.client_id, d.aberta_em, d.prazo, d.responsavel_id ?? null, d.desconto_centavos, d.observacoes, chave, em, u, unitId),
       ...comandosItens(db, id, d, catalogo, 0, new Set(), em),
       guardaTotal(db, id),
       db.prepare("INSERT INTO order_status_history (id, order_id, de, para, user_id, em) VALUES (?, ?, NULL, 'recebida', ?, ?)").bind(uuid(), id, u, em),
@@ -312,8 +316,9 @@ rotasOrdens.put('/:id', async c => {
   const db = c.env.DB;
   const d = await lerCorpo(c, zOS);
   if (d.versao === undefined) throw new ErroApp(422, 'dados_invalidos', 'Versão da OS não informada.');
-  const atual = await db.prepare('SELECT status, aberta_em, prazo, desconto_centavos, client_id FROM orders WHERE id = ?')
-    .bind(id).first<{ status: string; aberta_em: string; prazo: string; desconto_centavos: number; client_id: string }>();
+  await osVisivel(c, id);
+  const atual = await db.prepare('SELECT status, aberta_em, prazo, desconto_centavos, client_id, unit_id FROM orders WHERE id = ?')
+    .bind(id).first<{ status: string; aberta_em: string; prazo: string; desconto_centavos: number; client_id: string; unit_id: string }>();
   if (!atual) throw naoEncontrado('Ordem de serviço');
   if (atual.status === 'entregue' || atual.status === 'cancelada') throw new ErroApp(409, 'os_bloqueada', 'OS entregue ou cancelada não pode ser alterada.');
   if (d.client_id !== atual.client_id) {
@@ -328,7 +333,7 @@ rotasOrdens.put('/:id', async c => {
     'SELECT s.id, s.item_id, s.service_id, s.valor_unitario_centavos FROM order_item_services s JOIN order_items i ON i.id = s.item_id WHERE i.order_id = ?',
   ).bind(id).all<LinhaAtual>();
   conferirPrecos(c, d, catalogo, linhas, atual.desconto_centavos);
-  if (d.prazo !== atual.prazo) await conferirCapacidade(c, d.prazo, id, d.confirmar_lotado, tempoDaOS(d, catalogo));
+  if (d.prazo !== atual.prazo) await conferirCapacidade(c, atual.unit_id, d.prazo, id, d.confirmar_lotado, tempoDaOS(d, catalogo));
   const { results: itensAtuais } = await db.prepare('SELECT id, seq, peca, status_producao FROM order_items WHERE order_id = ?')
     .bind(id).all<{ id: string; seq: number; peca: string; status_producao: string }>();
   const existentes = new Set(itensAtuais.map(i => i.id));
@@ -369,6 +374,7 @@ rotasOrdens.put('/:id', async c => {
 rotasOrdens.post('/:id/status', async c => {
   exigir(c, 'os.status');
   const id = c.req.param('id');
+  await osVisivel(c, id);
   const db = c.env.DB;
   const d = await lerCorpo(c, z.object({
     para: z.string(),
@@ -433,6 +439,7 @@ rotasOrdens.patch('/:id/itens/:itemId', async c => {
   exigir(c, 'producao.atualizar');
   const { id, itemId } = c.req.param();
   const db = c.env.DB;
+  if (c.get('usuario').papel !== 'costureira') await osVisivel(c, id);
   const d = await lerCorpo(c, z.object({
     status_producao: z.enum(['aguardando', 'em_execucao', 'aguardando_prova', 'ajustes_finais', 'finalizado']).optional(),
     responsavel_id: z.string().max(64).nullable().optional(),
@@ -442,10 +449,10 @@ rotasOrdens.patch('/:id/itens/:itemId', async c => {
     tempo_manual_min: z.number().int().min(1).max(1440).optional(),
   }));
   const item = await db.prepare(
-    `SELECT i.status_producao, i.responsavel_id, i.iniciado_em, i.urgente, i.obs_interna, o.status
+    `SELECT i.status_producao, i.responsavel_id, i.iniciado_em, i.urgente, i.obs_interna, o.status, o.unit_id
      FROM order_items i JOIN orders o ON o.id = i.order_id WHERE i.id = ? AND o.id = ?`,
-  ).bind(itemId, id).first<{ status_producao: string; responsavel_id: string | null; iniciado_em: string | null; urgente: number; obs_interna: string; status: string }>();
-  if (!item) throw naoEncontrado('Peça');
+  ).bind(itemId, id).first<{ status_producao: string; responsavel_id: string | null; iniciado_em: string | null; urgente: number; obs_interna: string; status: string; unit_id: string }>();
+  if (!item || !c.get('unidades').includes(item.unit_id)) throw naoEncontrado('Peça');
   const u = c.get('usuario');
   if (d.assumir) {
     // Qualquer profissional de produção pode assumir uma peça que ainda está sem responsável.
@@ -542,6 +549,7 @@ rotasOrdens.patch('/:id/itens/:itemId', async c => {
 rotasOrdens.post('/:id/mensagens', async c => {
   exigir(c, 'whatsapp.usar');
   const id = c.req.param('id');
+  await osVisivel(c, id);
   const d = await lerCorpo(c, z.object({ modelo: z.string(), texto: z.string().max(2000) }));
   if (!(d.modelo in MODELOS_MENSAGEM)) throw new ErroApp(422, 'dados_invalidos', 'Modelo de mensagem inválido.');
   const os = await c.env.DB.prepare('SELECT client_id FROM orders WHERE id = ?').bind(id).first<{ client_id: string }>();
@@ -555,5 +563,9 @@ rotasOrdens.post('/:id/mensagens', async c => {
 rotasOrdens.get('/:id/impressao', async c => {
   exigir(c, 'os.ver');
   const os = await carregarOS(c, c.req.param('id'));
-  return c.json({ os, atelie: await lerConfigAtelie(c.env.DB) });
+  const [atelie, un] = await Promise.all([lerConfigAtelie(c.env.DB), lerUnidade(c.env.DB, (os as Record<string, unknown>).unit_id as string)]);
+  // Cada filial imprime com o próprio endereço, telefone e CNPJ (quando cadastrados).
+  const multi = ((await c.env.DB.prepare('SELECT COUNT(*) AS n FROM units WHERE ativo = 1').first<{ n: number }>())?.n ?? 1) > 1;
+  return c.json({ os, atelie: { ...atelie, endereco: un?.endereco || atelie.endereco, telefone: un?.telefone || atelie.telefone,
+    documento: un?.documento || atelie.documento, unidade: multi ? un?.nome : null } });
 });

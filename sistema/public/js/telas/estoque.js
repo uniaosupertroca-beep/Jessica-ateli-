@@ -5,6 +5,8 @@ import { modalAbrirCaixa } from './ordens.js';
 
 const est = { aba: 'materiais', q: '', categoria: '', baixo: false };
 const qtd = (v, un) => `${String(Math.round(v * 1000) / 1000).replace('.', ',')} ${esc(un)}`;
+const multi = () => sessao.unidades.length > 1;
+const nomeUnidade = () => sessao.unidades.find(u => u.id === sessao.unidade)?.sigla || 'todas';
 const lerQtd = t => { const n = Number(String(t).trim().replace(',', '.')); return Number.isFinite(n) ? Math.round(n * 1000) / 1000 : NaN; };
 
 export async function telaEstoque(el, params, vivo) {
@@ -23,9 +25,10 @@ export async function telaEstoque(el, params, vivo) {
         <input class="in" id="e-q" type="search" placeholder="Buscar por nome ou código" value="${esc(est.q)}" style="flex:1;min-width:180px">
         <select class="in" id="e-cat" style="width:auto"><option value="">Todas as categorias</option>${Object.entries(CATEGORIAS_MATERIAL).map(([k, l]) => `<option value="${k}" ${est.categoria === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
         <label class="chk"><input type="checkbox" id="e-baixo" ${est.baixo ? 'checked' : ''}> Só abaixo do mínimo</label></div>
-      ${materiais.length ? `<div class="tw"><table><thead><tr><th>Código</th><th>Material</th><th>Categoria</th><th class="r">Saldo</th><th class="r">Mínimo</th>${verCusto ? '<th class="r">Custo médio</th><th class="r">Valor em estoque</th>' : ''}<th>Local</th></tr></thead><tbody>
+      ${materiais.length ? `<div class="tw"><table><thead><tr><th>Código</th><th>Material</th><th>Categoria</th><th class="r">Saldo${multi() ? ` (${esc(nomeUnidade())})` : ''}</th>${multi() && sessao.unidade ? '<th class="r">Total do grupo</th>' : ''}<th class="r">Mínimo</th>${verCusto ? '<th class="r">Custo médio</th><th class="r">Valor em estoque</th>' : ''}<th>Local</th></tr></thead><tbody>
         ${materiais.map(m => `<tr class="click" data-href="#estoque/${m.id}"><td class="num">${esc(m.codigo)}</td><td><b>${esc(m.nome)}</b>${m.fornecedor ? `<div class="ajuda">${esc(m.fornecedor)}</div>` : ''}</td>
           <td>${CATEGORIAS_MATERIAL[m.categoria]}</td><td class="r num" style="${m.abaixo_minimo ? 'color:var(--crit);font-weight:700' : ''}">${qtd(m.quantidade, m.unidade)}</td>
+          ${multi() && sessao.unidade ? `<td class="r num muted">${qtd(m.quantidade_total, m.unidade)}</td>` : ''}
           <td class="r num muted">${qtd(m.estoque_minimo, m.unidade)}</td>${verCusto ? `<td class="r num">${brl(m.custo_medio_centavos)}</td><td class="r num">${brl(Math.max(0, m.quantidade) * m.custo_medio_centavos)}</td>` : ''}
           <td class="muted">${esc(m.localizacao || '')}</td></tr>`).join('')}</tbody></table></div>`
         : '<div class="empty">Nenhum material cadastrado com esses filtros.</div>'}</div>`;
@@ -90,28 +93,55 @@ async function telaMaterial(el, id, vivo) {
       <p>${esc(m.codigo)} · ${CATEGORIAS_MATERIAL[m.categoria]}${m.localizacao ? ' · ' + esc(m.localizacao) : ''}${m.fornecedor ? ' · ' + esc(m.fornecedor) : ''}</p></div>
       ${pode ? '<button class="btn" data-a="editar">Editar</button>' : ''}</div>
     <div class="grid g3">
-      <div class="panel stat"><span class="lbl">Saldo</span><span class="val num" style="${m.abaixo_minimo ? 'color:var(--crit)' : ''}">${qtd(m.quantidade, m.unidade)}</span><span class="sub">mínimo ${qtd(m.estoque_minimo, m.unidade)}</span></div>
+      <div class="panel stat"><span class="lbl">Saldo${multi() ? (sessao.unidade ? ' nesta unidade' : ' (todas)') : ''}</span><span class="val num" style="${m.abaixo_minimo ? 'color:var(--crit)' : ''}">${qtd(m.quantidade, m.unidade)}</span><span class="sub">mínimo ${qtd(m.estoque_minimo, m.unidade)}${multi() && sessao.unidade ? ` · total do grupo ${qtd(m.quantidade_total, m.unidade)}` : ''}</span></div>
       ${verCusto ? `<div class="panel stat"><span class="lbl">Custo médio</span><span class="val num">${brl(m.custo_medio_centavos)}</span><span class="sub">por ${UNIDADES_ESTOQUE[m.unidade]}</span></div>
       <div class="panel stat"><span class="lbl">Valor em estoque</span><span class="val num">${brl(Math.max(0, m.quantidade) * m.custo_medio_centavos)}</span></div>` : ''}
     </div>
     ${pode ? `<div class="row"><button class="btn pri" data-mov="compra">+ Entrada por compra</button><button class="btn" data-mov="devolucao">Devolução</button>
-      <button class="btn" data-mov="perda">Perda</button><button class="btn" data-mov="ajuste">Ajuste de inventário</button></div>` : ''}
+      <button class="btn" data-mov="perda">Perda</button><button class="btn" data-mov="ajuste">Ajuste de inventário</button>
+      ${multi() ? '<button class="btn" data-a="transferir">Transferir para outra unidade</button>' : ''}</div>
+      ${multi() && !sessao.unidade ? '<p class="ajuda" style="margin:0">Para registrar movimentações, escolha a unidade no topo da tela.</p>' : ''}` : ''}
     <div class="panel"><h2>Movimentações</h2>${movimentos.length ? `<div class="tw"><table><thead><tr><th>Quando</th><th>Tipo</th><th class="r">Quantidade</th>${verCusto ? '<th class="r">Custo un.</th>' : ''}<th>OS / documento</th><th>Motivo</th><th>Por</th><th></th></tr></thead><tbody>
-      ${movimentos.map(v => `<tr><td class="num">${dataHora(v.criado_em)}</td><td>${TIPOS_MOVIMENTO[v.tipo]}${v.autorizado_negativo ? ' <span class="pill p-warn">negativo autorizado</span>' : ''}</td>
+      ${movimentos.map(v => `<tr><td class="num">${dataHora(v.criado_em)}</td><td>${TIPOS_MOVIMENTO[v.tipo]}${multi() && v.unidade_sigla ? ` <span class="tag-un">${esc(v.unidade_sigla)}</span>` : ''}${v.autorizado_negativo ? ' <span class="pill p-warn">negativo autorizado</span>' : ''}</td>
         <td class="r num" style="color:${v.quantidade > 0 ? 'var(--ok)' : 'var(--crit)'}">${v.quantidade > 0 ? '+' : '−'} ${qtd(Math.abs(v.quantidade), m.unidade)}</td>
         ${verCusto ? `<td class="r num">${v.custo_unitario_centavos ? brl(v.custo_unitario_centavos) : '—'}</td>` : ''}
         <td>${v.order_id ? `<a href="#ordens/${v.order_id}">${nOS(v.os_numero)}${v.peca_codigo ? ' · ' + esc(v.peca_codigo) : ''}</a>` : esc(v.documento || '')}</td>
         <td class="muted">${esc(v.motivo || '')}</td><td class="muted">${esc(v.usuario || '')}</td>
-        <td class="r">${v.revertido_por ? '<span class="pill p-muted">Revertido</span>' : v.reverte_de ? '<span class="pill p-warn">Reversão</span>' : pode ? `<button class="btn sm" data-reverter="${v.id}">Reverter</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
+        <td class="r">${v.revertido_por ? '<span class="pill p-muted">Revertido</span>' : v.reverte_de ? '<span class="pill p-warn">Reversão</span>' : v.tipo === 'transferencia' ? '' : pode ? `<button class="btn sm" data-reverter="${v.id}">Reverter</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">Nenhuma movimentação ainda.</div>'}</div>`;
   const recarregar = () => telaMaterial(el, id, vivo);
   el.onclick = e => {
     const b = e.target.closest('[data-a],[data-mov],[data-reverter]');
     if (!b) return;
     if (b.dataset.a === 'editar') formMaterial(m, recarregar);
+    if (b.dataset.a === 'transferir') transferir(m, recarregar);
     if (b.dataset.mov) formMovimento(m, b.dataset.mov, recarregar);
     if (b.dataset.reverter) reverter(b.dataset.reverter, recarregar);
   };
+}
+
+function transferir(m, depois) {
+  if (!sessao.unidade) return toast('Escolha no topo a unidade de onde o material vai sair.', true);
+  const chave = novaChave();
+  const origem = sessao.unidades.find(u => u.id === sessao.unidade);
+  const destinos = sessao.unidades.filter(u => u.id !== sessao.unidade);
+  modal({
+    title: `Transferir ${m.nome}`,
+    body: `<p style="margin:0 0 10px">Sai de <b>${esc(origem?.nome || '')}</b> (saldo ${qtd(m.quantidade, m.unidade)}) e entra na unidade escolhida. O total do grupo não muda.</p>
+      <div class="grid g2" style="gap:12px">
+      <div class="field"><label for="t-para">Para a unidade</label><select class="in" id="t-para">${destinos.map(u => `<option value="${esc(u.id)}">${esc(u.nome)} (${esc(u.sigla)})</option>`).join('')}</select></div>
+      <div class="field"><label class="req" for="t-qtd">Quantidade (${esc(m.unidade)})</label><input class="in num" id="t-qtd" inputmode="decimal"></div>
+      <div class="field" style="grid-column:1/-1"><label for="t-mot">Observação</label><input class="in" id="t-mot" placeholder="ex.: reposição da filial"></div></div>`,
+    actions: [{ label: 'Voltar' }, { label: 'Transferir', cls: 'pri', fn: async box => {
+      const quantidade = lerQtd($('#t-qtd', box).value);
+      if (!(quantidade > 0)) { toast('Informe a quantidade.', true); return false; }
+      try {
+        await api('/estoque/transferencias', { chave, corpo: { material_id: m.id, para_unit_id: $('#t-para', box).value, quantidade, motivo: $('#t-mot', box).value.trim() } });
+      } catch (e) { toast(e.message, true); return false; }
+      toast('Transferência registrada.');
+      depois();
+    } }],
+  });
 }
 
 async function formMovimento(m, tipo, depois) {

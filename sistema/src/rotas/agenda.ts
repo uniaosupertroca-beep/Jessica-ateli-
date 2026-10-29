@@ -4,7 +4,8 @@ import type { AppEnv } from '../env';
 import { auditoria } from '../lib/auditoria';
 import { ErroApp, naoEncontrado } from '../lib/erros';
 import { agora, exigir, hoje, lerCorpo, uuid, zData } from '../lib/util';
-import { lerConfigAtelie } from './config';
+import { capacidadeAgenda, lerUnidade } from './config';
+import { filtroUnidade, unidadeParaGravar } from '../lib/unidades';
 import { diaDaSemana, horariosConflitam, somarDias, TIPOS_AGENDA } from '../../public/js/regras.js';
 
 export const rotasAgenda = new Hono<AppEnv>();
@@ -17,19 +18,21 @@ type Prof = { id: string; nome: string; capacidade_min_dia: number; dias_trabalh
  *  - demanda    = tempo previsto dos serviços das peças não finalizadas cujo prazo (da peça ou da OS) cai naquele dia.
  * Provas são contadas à parte (capacidade de atendimento, não de produção).
  */
-export async function cargaPorDia(db: D1Database, de: string, ate: string) {
+export async function cargaPorDia(db: D1Database, de: string, ate: string, unidades: string[]) {
+  const ph = unidades.map(() => '?').join(',');
   const [profs, ausencias, demanda, provas] = await Promise.all([
-    db.prepare('SELECT id, nome, capacidade_min_dia, dias_trabalho FROM users WHERE ativo = 1 AND capacidade_min_dia > 0').all<Prof>(),
+    db.prepare(`SELECT DISTINCT u.id, u.nome, u.capacidade_min_dia, u.dias_trabalho FROM users u JOIN user_units uu ON uu.user_id = u.id
+      WHERE u.ativo = 1 AND u.capacidade_min_dia > 0 AND uu.unit_id IN (${ph})`).bind(...unidades).all<Prof>(),
     db.prepare("SELECT dia, profissional_id FROM appointments WHERE tipo = 'ausencia' AND status = 'agendado' AND dia BETWEEN ? AND ?").bind(de, ate)
       .all<{ dia: string; profissional_id: string }>(),
     db.prepare(
       `SELECT COALESCE(i.prazo, o.prazo) AS dia, i.responsavel_id, SUM(s.tempo_min) AS minutos
        FROM order_item_services s JOIN order_items i ON i.id = s.item_id JOIN orders o ON o.id = i.order_id
-       WHERE o.status NOT IN ('entregue','cancelada') AND i.status_producao <> 'finalizado'
+       WHERE o.status NOT IN ('entregue','cancelada') AND i.status_producao <> 'finalizado' AND o.unit_id IN (${ph})
          AND COALESCE(i.prazo, o.prazo) BETWEEN ? AND ? GROUP BY 1, 2`,
-    ).bind(de, ate).all<{ dia: string; responsavel_id: string | null; minutos: number }>(),
-    db.prepare("SELECT dia, COUNT(*) AS qtd FROM appointments WHERE tipo = 'prova' AND status = 'agendado' AND dia BETWEEN ? AND ? GROUP BY dia")
-      .bind(de, ate).all<{ dia: string; qtd: number }>(),
+    ).bind(...unidades, de, ate).all<{ dia: string; responsavel_id: string | null; minutos: number }>(),
+    db.prepare(`SELECT dia, COUNT(*) AS qtd FROM appointments WHERE tipo = 'prova' AND status = 'agendado' AND unit_id IN (${ph}) AND dia BETWEEN ? AND ? GROUP BY dia`)
+      .bind(...unidades, de, ate).all<{ dia: string; qtd: number }>(),
   ]);
   const dias: Record<string, { capacidade_min: number; demanda_min: number; provas: number; ausentes: string[]; por_profissional: Record<string, { capacidade_min: number; demanda_min: number }> }> = {};
   for (let d = de; d <= ate; d = somarDias(d, 1)) {
@@ -58,7 +61,10 @@ rotasAgenda.get('/agenda', async c => {
   const ate = c.req.query('ate') || somarDias(de, 41);
   if (!zData.safeParse(de).success || !zData.safeParse(ate).success || ate < de || somarDias(de, 92) < ate)
     throw new ErroApp(422, 'dados_invalidos', 'Período da agenda inválido.');
-  const cfg = await lerConfigAtelie(c.env.DB);
+  const unidades = c.get('unidade') ? [c.get('unidade')!] : c.get('unidades');
+  const cfg = await capacidadeAgenda(c.env.DB, unidades);
+  const un = filtroUnidade(c, 'o.unit_id');
+  const ua = filtroUnidade(c, 'a.unit_id');
   const u = c.get('usuario');
   const costureira = u.papel === 'costureira';
   const vis = costureira ? 'AND (o.responsavel_id = ? OR EXISTS (SELECT 1 FROM order_items vi WHERE vi.order_id = o.id AND vi.responsavel_id = ?))' : '';
@@ -68,17 +74,19 @@ rotasAgenda.get('/agenda', async c => {
          (SELECT GROUP_CONCAT(peca, ', ') FROM (SELECT peca FROM order_items WHERE order_id = o.id ORDER BY posicao)) AS pecas,
          (SELECT COALESCE(SUM(s.tempo_min), 0) FROM order_item_services s JOIN order_items i ON i.id = s.item_id WHERE i.order_id = o.id) AS tempo_min
        FROM orders o JOIN clients c ON c.id = o.client_id
-       WHERE o.prazo BETWEEN ? AND ? AND o.status <> 'cancelada' ${vis} ORDER BY o.prazo, o.numero`,
-    ).bind(de, ate, ...(costureira ? [u.id, u.id] : [])).all(),
-    c.env.DB.prepare("SELECT prazo, COUNT(*) AS qtd FROM orders WHERE prazo BETWEEN ? AND ? AND status <> 'cancelada' GROUP BY prazo").bind(de, ate).all(),
+       WHERE o.prazo BETWEEN ? AND ? AND o.status <> 'cancelada' AND ${un.sql} ${vis} ORDER BY o.prazo, o.numero`,
+    ).bind(de, ate, ...un.binds, ...(costureira ? [u.id, u.id] : [])).all(),
+    c.env.DB.prepare(`SELECT o.prazo, COUNT(*) AS qtd FROM orders o WHERE o.prazo BETWEEN ? AND ? AND o.status <> 'cancelada' AND ${un.sql} GROUP BY o.prazo`)
+      .bind(de, ate, ...un.binds).all(),
     c.env.DB.prepare(
       `SELECT a.id, a.tipo, a.titulo, a.dia, a.hora_inicio, a.hora_fim, a.status, a.observacoes, a.excecao, a.order_id, a.item_id, a.client_id,
          a.profissional_id, u.nome AS profissional, c.nome AS cliente, o.numero
        FROM appointments a LEFT JOIN users u ON u.id = a.profissional_id LEFT JOIN clients c ON c.id = a.client_id LEFT JOIN orders o ON o.id = a.order_id
-       WHERE a.dia BETWEEN ? AND ? AND a.status <> 'cancelado' ${costureira ? 'AND (a.profissional_id = ? OR a.profissional_id IS NULL)' : ''}
+       WHERE a.dia BETWEEN ? AND ? AND a.status <> 'cancelado' AND (${ua.sql} OR a.tipo = 'ausencia')
+         ${costureira ? 'AND (a.profissional_id = ? OR a.profissional_id IS NULL)' : ''}
        ORDER BY a.dia, COALESCE(a.hora_inicio, '00:00')`,
-    ).bind(de, ate, ...(costureira ? [u.id] : [])).all(),
-    cargaPorDia(c.env.DB, de, ate),
+    ).bind(de, ate, ...ua.binds, ...(costureira ? [u.id] : [])).all(),
+    cargaPorDia(c.env.DB, de, ate, unidades),
   ]);
   return c.json({
     de, ate, hoje: hoje(), capacidade: cfg.capacidade_diaria, limite_quase_cheio: cfg.limite_quase_cheio,
@@ -106,13 +114,14 @@ const zCompromisso = z.object({
 type Compromisso = z.infer<typeof zCompromisso>;
 
 /** Conflitos: mesma profissional no mesmo horário, ausência da profissional, provas acima da capacidade do dia. */
-async function conflitos(c: Context<AppEnv>, d: Compromisso, ignorarId: string | null) {
+async function conflitos(c: Context<AppEnv>, d: Compromisso, ignorarId: string | null, unitId: string) {
   const db = c.env.DB;
-  const cfg = await lerConfigAtelie(db);
+  const cfg = (await lerUnidade(db, unitId))!;
+  // A mesma pessoa não pode estar em dois lugares: conflitos de profissional valem entre unidades; o limite de provas é por unidade.
   const { results: doDia } = await db.prepare(
-    `SELECT a.id, a.tipo, a.titulo, a.hora_inicio, a.hora_fim, a.profissional_id, u.nome AS profissional FROM appointments a
+    `SELECT a.id, a.tipo, a.titulo, a.hora_inicio, a.hora_fim, a.profissional_id, a.unit_id, u.nome AS profissional FROM appointments a
      LEFT JOIN users u ON u.id = a.profissional_id WHERE a.dia = ? AND a.status = 'agendado' AND a.id IS NOT ?`,
-  ).bind(d.dia, ignorarId).all<{ id: string; tipo: string; titulo: string; hora_inicio: string | null; hora_fim: string | null; profissional_id: string | null; profissional: string | null }>();
+  ).bind(d.dia, ignorarId).all<{ id: string; tipo: string; titulo: string; hora_inicio: string | null; hora_fim: string | null; profissional_id: string | null; unit_id: string; profissional: string | null }>();
   const avisos: string[] = [];
   if (d.profissional_id) {
     for (const a of doDia) {
@@ -123,7 +132,7 @@ async function conflitos(c: Context<AppEnv>, d: Compromisso, ignorarId: string |
     }
   }
   if (d.tipo === 'prova') {
-    const provas = doDia.filter(a => a.tipo === 'prova');
+    const provas = doDia.filter(a => a.tipo === 'prova' && a.unit_id === unitId);
     if (provas.length >= cfg.capacidade_provas_dia) avisos.push(`O dia já tem ${provas.length} provas (limite ${cfg.capacidade_provas_dia}).`);
     if (d.hora_inicio && provas.some(a => horariosConflitam(a, d))) avisos.push(`Já existe outra prova às ${d.hora_inicio}.`);
     if (d.hora_inicio && (d.hora_inicio < cfg.horario_inicio || d.hora_inicio >= cfg.horario_fim))
@@ -135,9 +144,11 @@ async function conflitos(c: Context<AppEnv>, d: Compromisso, ignorarId: string |
 
 async function prepararCompromisso(c: Context<AppEnv>, d: Compromisso) {
   const db = c.env.DB;
+  let unitId = c.get('unidade');
   if (d.order_id) {
-    const os = await db.prepare('SELECT client_id, numero FROM orders WHERE id = ?').bind(d.order_id).first<{ client_id: string; numero: number }>();
-    if (!os) throw new ErroApp(422, 'os_invalida', 'OS não encontrada.');
+    const os = await db.prepare('SELECT client_id, numero, unit_id FROM orders WHERE id = ?').bind(d.order_id).first<{ client_id: string; numero: number; unit_id: string }>();
+    if (!os || !c.get('unidades').includes(os.unit_id)) throw new ErroApp(422, 'os_invalida', 'OS não encontrada.');
+    unitId = os.unit_id; // o compromisso fica na unidade da OS
     d.client_id = os.client_id;
     if (d.item_id) {
       const it = await db.prepare('SELECT 1 FROM order_items WHERE id = ? AND order_id = ?').bind(d.item_id, d.order_id).first();
@@ -156,25 +167,26 @@ async function prepararCompromisso(c: Context<AppEnv>, d: Compromisso) {
     if (d.tipo === 'ausencia') d.titulo ||= `Ausência · ${p.nome}`;
   }
   d.titulo ||= TIPOS_AGENDA[d.tipo as keyof typeof TIPOS_AGENDA];
-  const avisos = await conflitos(c, d, null);
+  if (!unitId) unitId = unidadeParaGravar(c);
+  const avisos = await conflitos(c, d, null, unitId);
   if (avisos.length) {
     // Só o administrador encaixa um compromisso com conflito, e precisa justificar.
     if (!d.excecao) throw new ErroApp(409, 'conflito_agenda', 'Há conflitos neste horário.', { conflitos: avisos, pode_excecao: c.get('usuario').papel === 'admin' });
     if (c.get('usuario').papel !== 'admin') throw new ErroApp(403, 'excecao_restrita', 'Somente o administrador pode encaixar um compromisso com conflito.');
   }
-  return avisos;
+  return { avisos, unitId };
 }
 
 rotasAgenda.post('/agenda/compromissos', async c => {
   exigir(c, 'agenda.editar');
   const d = await lerCorpo(c, zCompromisso);
-  const avisos = await prepararCompromisso(c, d);
+  const { avisos, unitId } = await prepararCompromisso(c, d);
   const id = uuid();
   await c.env.DB.batch([
     c.env.DB.prepare(`INSERT INTO appointments (id, tipo, titulo, dia, hora_inicio, hora_fim, client_id, order_id, item_id, profissional_id, observacoes,
-        excecao, criado_em, criado_por) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        excecao, criado_em, criado_por, unit_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .bind(id, d.tipo, d.titulo, d.dia, d.hora_inicio ?? null, d.hora_fim ?? null, d.client_id ?? null, d.order_id ?? null, d.item_id ?? null,
-        d.profissional_id ?? null, d.observacoes, avisos.length ? `${d.excecao} — conflitos: ${avisos.join(' ')}` : null, agora(), c.get('usuario').id),
+        d.profissional_id ?? null, d.observacoes, avisos.length ? `${d.excecao} — conflitos: ${avisos.join(' ')}` : null, agora(), c.get('usuario').id, unitId),
     auditoria(c, 'agendar', 'appointments', id, { tipo: d.tipo, dia: d.dia, excecao: d.excecao }),
   ]);
   return c.json({ id }, 201);
@@ -184,10 +196,10 @@ rotasAgenda.put('/agenda/compromissos/:id', async c => {
   exigir(c, 'agenda.editar');
   const id = c.req.param('id');
   const d = await lerCorpo(c, zCompromisso);
-  const atual = await c.env.DB.prepare('SELECT status FROM appointments WHERE id = ?').bind(id).first();
-  if (!atual) throw naoEncontrado('Compromisso');
+  const atual = await c.env.DB.prepare('SELECT status, unit_id FROM appointments WHERE id = ?').bind(id).first<{ status: string; unit_id: string }>();
+  if (!atual || !c.get('unidades').includes(atual.unit_id)) throw naoEncontrado('Compromisso');
   const avisos = await (async () => {
-    const av = await conflitos(c, d, id);
+    const av = await conflitos(c, d, id, atual.unit_id);
     if (av.length && !d.excecao) throw new ErroApp(409, 'conflito_agenda', 'Há conflitos neste horário.', { conflitos: av, pode_excecao: c.get('usuario').papel === 'admin' });
     if (av.length && c.get('usuario').papel !== 'admin') throw new ErroApp(403, 'excecao_restrita', 'Somente o administrador pode encaixar um compromisso com conflito.');
     return av;
@@ -206,6 +218,8 @@ rotasAgenda.patch('/agenda/compromissos/:id', async c => {
   exigir(c, 'agenda.editar');
   const id = c.req.param('id');
   const { status } = await lerCorpo(c, z.object({ status: z.enum(['agendado', 'realizado', 'cancelado', 'faltou']) }));
+  const ap = await c.env.DB.prepare('SELECT unit_id FROM appointments WHERE id = ?').bind(id).first<{ unit_id: string }>();
+  if (!ap || !c.get('unidades').includes(ap.unit_id)) throw naoEncontrado('Compromisso');
   const [r] = await c.env.DB.batch([
     c.env.DB.prepare('UPDATE appointments SET status = ?, atualizado_em = ? WHERE id = ?').bind(status, agora(), id),
     auditoria(c, 'status_compromisso', 'appointments', id, { status }),

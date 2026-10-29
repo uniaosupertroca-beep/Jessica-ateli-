@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../env';
 import { ErroApp, naoEncontrado } from '../lib/erros';
 import { exigir, hoje, textoBusca } from '../lib/util';
+import { filtroUnidade } from '../lib/unidades';
 import { STATUS_DE_PRODUCAO, somarDias } from '../../public/js/regras.js';
 
 /** Quadro de produção (Kanban), consulta de peça pelo código da etiqueta e eventos. */
@@ -13,8 +14,9 @@ rotasProducao.get('/producao', async c => {
   exigir(c, 'producao.ver');
   const u = c.get('usuario');
   const h = hoje();
-  const conds = [`o.status IN (${PROD})`];
-  const binds: unknown[] = [];
+  const un = filtroUnidade(c, 'o.unit_id');
+  const conds = [`o.status IN (${PROD})`, un.sql];
+  const binds: unknown[] = [...un.binds];
   // Costureira vê as peças dela e as que ainda não têm responsável (para poder assumir).
   if (u.papel === 'costureira') {
     conds.push('(i.responsavel_id = ? OR i.responsavel_id IS NULL)');
@@ -48,25 +50,29 @@ rotasProducao.get('/producao', async c => {
      WHERE ${conds.join(' AND ')}
      ORDER BY i.urgente DESC, COALESCE(i.prazo, o.prazo), o.numero, i.seq LIMIT 500`,
   ).bind(h, ...binds).all();
-  // Carga de cada profissional: tempo previsto das peças não finalizadas atribuídas a ela.
+  // Carga de cada profissional da(s) unidade(s): tempo previsto das peças não finalizadas atribuídas a ela.
+  const uu = filtroUnidade(c, 'uu.unit_id');
+  const uo = filtroUnidade(c, 'o.unit_id');
   const { results: carga } = await c.env.DB.prepare(
     `SELECT u.id, u.nome, u.capacidade_min_dia,
        COALESCE(SUM(CASE WHEN i.status_producao <> 'finalizado' THEN (SELECT COALESCE(SUM(s.tempo_min),0) FROM order_item_services s WHERE s.item_id = i.id) END), 0) AS carga_min,
        COUNT(CASE WHEN i.status_producao <> 'finalizado' THEN 1 END) AS pecas
      FROM users u LEFT JOIN order_items i ON i.responsavel_id = u.id
-       AND EXISTS (SELECT 1 FROM orders o WHERE o.id = i.order_id AND o.status IN (${PROD}))
-     WHERE u.ativo = 1 AND (u.capacidade_min_dia > 0 OR u.papel = 'costureira') GROUP BY u.id ORDER BY u.nome`,
-  ).all();
+       AND EXISTS (SELECT 1 FROM orders o WHERE o.id = i.order_id AND o.status IN (${PROD}) AND ${uo.sql})
+     WHERE u.ativo = 1 AND (u.capacidade_min_dia > 0 OR u.papel = 'costureira')
+       AND EXISTS (SELECT 1 FROM user_units uu WHERE uu.user_id = u.id AND ${uu.sql}) GROUP BY u.id ORDER BY u.nome`,
+  ).bind(...uo.binds, ...uu.binds).all();
   return c.json({ hoje: h, pecas: results, profissionais: carga });
 });
 
 rotasProducao.get('/producao/:itemId/eventos', async c => {
   exigir(c, 'producao.ver');
   const u = c.get('usuario');
-  if (u.papel === 'costureira') {
-    const ok = await c.env.DB.prepare('SELECT 1 FROM order_items WHERE id = ? AND (responsavel_id = ? OR responsavel_id IS NULL)').bind(c.req.param('itemId'), u.id).first();
-    if (!ok) throw naoEncontrado('Peça');
-  }
+  const un = filtroUnidade(c, 'o.unit_id');
+  const cost = u.papel === 'costureira';
+  const ok = await c.env.DB.prepare(`SELECT 1 FROM order_items i JOIN orders o ON o.id = i.order_id WHERE i.id = ? AND ${un.sql}
+    ${cost ? 'AND (i.responsavel_id = ? OR i.responsavel_id IS NULL)' : ''}`).bind(c.req.param('itemId'), ...un.binds, ...(cost ? [u.id] : [])).first();
+  if (!ok) throw naoEncontrado('Peça');
   const { results } = await c.env.DB.prepare(
     `SELECT e.tipo, e.minutos, e.texto, e.em, u.nome AS usuario FROM production_events e LEFT JOIN users u ON u.id = e.user_id
      WHERE e.item_id = ? ORDER BY e.em DESC LIMIT 100`,

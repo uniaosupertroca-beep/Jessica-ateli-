@@ -334,7 +334,7 @@ export const CATEGORIAS_MATERIAL = {
   entretela: 'Entretelas', agulha: 'Agulhas', aviamento: 'Aviamentos', outro: 'Outros materiais',
 };
 export const UNIDADES_ESTOQUE = { un: 'unidade', m: 'metro', cm: 'centímetro', pct: 'pacote', rolo: 'rolo', kg: 'quilo', g: 'grama', cx: 'caixa' };
-export const TIPOS_MOVIMENTO = { compra: 'Entrada por compra', consumo: 'Consumo em OS', devolucao: 'Devolução', perda: 'Perda', ajuste: 'Ajuste de inventário', reversao: 'Reversão' };
+export const TIPOS_MOVIMENTO = { compra: 'Entrada por compra', consumo: 'Consumo em OS', devolucao: 'Devolução', perda: 'Perda', ajuste: 'Ajuste de inventário', reversao: 'Reversão', transferencia: 'Transferência entre unidades' };
 
 /** Soma quantidades fracionadas sem erro de arredondamento (3 casas). */
 export function somarQtd(a, b) {

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { AppEnv, Env } from './env';
 import { exigirLogin } from './lib/auth';
+import { carregarUnidades } from './lib/unidades';
 import { ErroApp, traduzirErroBanco } from './lib/erros';
 import { exigir, ip } from './lib/util';
 import { gerarBackup } from './backup';
@@ -47,6 +48,7 @@ api.route('/auth', rotasAuth);
 
 /* Daqui para baixo, tudo exige login. */
 api.use('*', exigirLogin);
+api.use('*', carregarUnidades);
 api.route('/usuarios', rotasUsuarios);
 api.route('/config', rotasConfig);
 api.route('/clientes', rotasClientes);
