@@ -180,7 +180,7 @@ export async function telaCliente(el, params, vivo) {
       title: 'Excluir dados pessoais',
       body: `<p style="margin:0 0 10px">Nome, telefones, e-mail, endereço, observações e <b>todas as fotos</b> de ${esc(c.nome)} serão apagados. As OS e os valores continuam no sistema, sem identificar a pessoa. Não dá para desfazer.</p>
         <div class="field"><label for="m-conf">Digite ANONIMIZAR para confirmar</label><input class="in" id="m-conf" autocomplete="off"></div>`,
-      actions: [{ label: 'Voltar' }, { label: 'Excluir dados', cls: 'danger', fn: async m => {
+      actions: [{ label: 'Voltar' }, { label: 'Excluir dados', cls: 'danger-solid', fn: async m => {
         try { await api(`/clientes/${id}/anonimizar`, { corpo: { confirmacao: $('#m-conf', m).value.trim() } }); } catch (err) { toast(err.message, true); return false; }
         toast('Dados pessoais excluídos.');
         location.hash = 'clientes';

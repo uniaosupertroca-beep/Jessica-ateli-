@@ -222,7 +222,7 @@ function painelStatus(ctx) {
   return `<div class="panel nao-imprimir"><div class="flow">${fluxo}</div>
     ${f.status === 'aprovada' || f.status === 'em_producao' ? '<p class="ajuda" style="margin:0">A situação avança sozinha conforme a produção de cada peça é atualizada.</p>' : ''}
     ${os.motivo && ['cancelada', 'pausada'].includes(f.status) ? `<div class="alert ${f.status === 'cancelada' ? 'a-crit' : 'a-warn'}">Motivo: ${esc(os.motivo)}</div>` : ''}
-    <div class="row">${trans.map(t => `<button class="btn sm ${t === 'cancelada' ? 'danger' : t === 'entregue' || t === 'aprovada' ? 'pri' : ''}" data-a="status" data-st="${t}">${rot[t] || STATUS_OS[t]}</button>`).join('')}
+    <div class="row">${trans.map(t => `<button class="btn sm ${t === 'cancelada' ? 'danger' : t === 'entregue' || t === 'aprovada' ? 'pri' : t === 'pausada' || t === 'retomar' ? 'sec' : ''}" data-a="status" data-st="${t}">${rot[t] || STATUS_OS[t]}</button>`).join('')}
       ${sessao.pode('whatsapp.usar') ? blocoWhatsApp(ctx) : ''}</div></div>`;
 }
 
@@ -237,7 +237,7 @@ function blocoWhatsApp(ctx) {
     <span class="ajuda">Cadastre um telefone válido na ficha da cliente para usar o WhatsApp.</span>`;
   const principal = ctx.f.status === 'pronta' ? 'pronta' : ctx.f.status === 'entregue' ? 'agradecimento' : ctx.f.status === 'aguardando_aprovacao' ? 'aprovacao' : ctx.f.status === 'aguardando_prova' ? 'prova' : 'recebimento';
   return `<button class="btn sm wa" data-a="wa" data-modelo="${principal}">${principal === 'pronta' ? 'Avisar que está pronta' : 'WhatsApp: ' + MODELOS_MENSAGEM[principal].toLowerCase()}</button>
-    <button class="btn sm" data-a="wa-outras">Outras mensagens</button>`;
+    <button class="btn sm ghost" data-a="wa-outras">Outras mensagens</button>`;
 }
 async function abrirWhatsApp(ctx, modelo) {
   const texto = montarMensagem(modelo, dadosMensagem(ctx));
@@ -346,7 +346,7 @@ export async function modalEstorno(id, aoConcluir) {
     title: 'Estornar lançamento',
     body: `<p style="margin:0 0 12px">Será criado um lançamento de correção no caixa de hoje. O original continua no histórico e não é apagado.</p>
       <div class="field"><label class="req" for="m-mot">Motivo do estorno</label><input class="in" id="m-mot" placeholder="Ex.: valor digitado errado"></div>`,
-    actions: [{ label: 'Voltar' }, { label: 'Estornar', cls: 'danger', fn: async m => {
+    actions: [{ label: 'Voltar' }, { label: 'Estornar', cls: 'danger-solid', fn: async m => {
       const motivo = $('#m-mot', m).value.trim();
       if (motivo.length < 3) { toast('Informe o motivo.', true); return false; }
       try {
@@ -555,7 +555,7 @@ async function mudarStatus(ctx, para) {
       title: `${verbo[0].toUpperCase() + verbo.slice(1)} ${nOS(f.numero)}`,
       body: `${para === 'cancelada' && os.pago > 0 ? `<div class="alert a-warn" style="margin-bottom:10px">Esta OS tem ${brl(os.pago)} em pagamentos. Estorne-os antes de cancelar.</div>` : ''}
         <div class="field"><label class="req" for="m-mot">Motivo</label><textarea class="in" id="m-mot" placeholder="${para === 'cancelada' ? 'Ex.: cliente desistiu' : 'Ex.: aguardando tecido da cliente'}"></textarea></div>`,
-      actions: [{ label: 'Voltar' }, { label: verbo === 'cancelar' ? 'Cancelar OS' : 'Pausar', cls: para === 'cancelada' ? 'danger' : 'pri', fn: async m => {
+      actions: [{ label: 'Voltar' }, { label: verbo === 'cancelar' ? 'Cancelar OS' : 'Pausar', cls: para === 'cancelada' ? 'danger-solid' : 'pri', fn: async m => {
         corpo.motivo = $('#m-mot', m).value.trim();
         if (!corpo.motivo) { toast('Informe o motivo.', true); return false; }
         return enviarStatus(ctx, corpo);
@@ -735,7 +735,7 @@ function verFoto(ctx, id) {
   modal({
     wide: true, title: `${CAT_FOTO[ft.categoria]}${peca ? ' · ' + peca.peca : ''}`,
     body: `<img class="foto-grande" src="/api/fotos/${id}" alt=""><p class="ajuda">Enviada em ${dataHora(ft.criado_em)}</p>`,
-    actions: [{ label: 'Fechar' }, ...(sessao.pode('fotos.excluir') ? [{ label: 'Excluir foto', cls: 'danger', fn: async () => {
+    actions: [{ label: 'Fechar' }, ...(sessao.pode('fotos.excluir') ? [{ label: 'Excluir foto', cls: 'danger-solid', fn: async () => {
       if (!(await confirmar('Excluir foto?', 'A imagem será apagada definitivamente.', 'Excluir', { perigo: true }))) return;
       await api(`/fotos/${id}`, { metodo: 'DELETE' });
       toast('Foto excluída.');

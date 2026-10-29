@@ -52,7 +52,7 @@ function desenharMenu(atual) {
   const itens = itensMenu();
   $('#nav-side').innerHTML = itens.map(([k, l]) => `<a href="#${k}" class="${k === atual ? 'on' : ''}" ${k === atual ? 'aria-current="page"' : ''}>${svg(k)}${esc(l)}</a>`).join('');
   $('#side-usuario').innerHTML = `<span><b>${esc(sessao.eu.nome)}</b><br><span class="muted">${esc({ admin: 'Administrador', atendente: 'Atendente', costureira: 'Costureira' }[sessao.eu.papel])}</span></span>
-    <button class="btn sm" data-sair>Sair</button>`;
+    <button class="btn sm ghost" data-sair>Sair</button>`;
   // Celular: até 4 atalhos fixos + "Mais" com o restante (erro 6 corrigido).
   const fixos = itens.slice(0, itens.length > 5 ? 4 : 5);
   const resto = itens.slice(fixos.length);

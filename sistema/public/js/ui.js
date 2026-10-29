@@ -50,7 +50,7 @@ export function modal({ title, body = '', actions, wide = false, onOpen }) {
   const m = $('#modal');
   m.innerHTML = `<div class="mbox ${wide ? 'wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="m-title">
     <h2 id="m-title">${esc(title)}</h2><div class="m-corpo">${body}</div>
-    <div class="mact">${acoes.map((a, i) => `<button type="button" class="btn ${a.cls || ''}" data-mact="${i}">${esc(a.label)}</button>`).join('')}</div></div>`;
+    <div class="mact">${acoes.map((a, i) => `<button type="button" class="btn ${a.cls || (a.label === 'Voltar' || a.label === 'Fechar' ? 'ghost' : '')}" data-mact="${i}">${esc(a.label)}</button>`).join('')}</div></div>`;
   m.hidden = false;
   const f = $('input:not([type=hidden]), select, textarea', m) || $('[data-mact]:last-child', m);
   f?.focus();
@@ -74,12 +74,14 @@ document.addEventListener('click', async e => {
   if (!a.fn) return fecharModal();
   const botoes = $$('[data-mact]', m);
   botoes.forEach(x => (x.disabled = true));
+  b.setAttribute('data-loading', '');
   try {
     const r = await a.fn(m);
     if (r === false) return;
     if (r !== 'manter') fecharModal();
   } finally {
     botoes.forEach(x => (x.disabled = false));
+    b.removeAttribute('data-loading');
   }
 });
 document.addEventListener('keydown', e => {
@@ -90,7 +92,7 @@ export function confirmar(title, msg, okLabel, { perigo = false } = {}) {
   return new Promise(resolve => {
     modal({
       title, body: `<p style="margin:0">${msg}</p>`,
-      actions: [{ label: 'Voltar', fn: () => resolve(false) }, { label: okLabel, cls: perigo ? 'danger' : 'pri', fn: () => resolve(true) }],
+      actions: [{ label: 'Voltar', fn: () => resolve(false) }, { label: okLabel, cls: perigo ? 'danger-solid' : 'pri', fn: () => resolve(true) }],
     });
     const m = $('#modal');
     const obs = new MutationObserver(() => { if (m.hidden) { obs.disconnect(); resolve(false); } });
@@ -101,11 +103,19 @@ export function confirmar(title, msg, okLabel, { perigo = false } = {}) {
 /** Trava um botão enquanto a ação roda (evita cliques repetidos). */
 export async function comBotao(botao, fn) {
   if (botao?.disabled) return;
-  if (botao) botao.disabled = true;
+  if (botao) {
+    botao.disabled = true;
+    botao.setAttribute('data-loading', '');
+    botao.setAttribute('aria-busy', 'true');
+  }
   try {
     return await fn();
   } finally {
-    if (botao) botao.disabled = false;
+    if (botao) {
+      botao.disabled = false;
+      botao.removeAttribute('data-loading');
+      botao.removeAttribute('aria-busy');
+    }
   }
 }
 
