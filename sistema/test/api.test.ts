@@ -43,6 +43,26 @@ describe('login e sessão', () => {
     expect((await chamar('/auth/eu', { cookie: cookieDe(r.r) })).status).toBe(401);
   });
 
+  it('entra pelo nome de usuário e exige trocar a senha inicial antes de usar', async () => {
+    const login = `maria${Date.now() % 100000}`;
+    const c = await chamar('/usuarios', { cookie: adm, corpo: { nome: 'Maria', email: `${login}@teste.com`, login, papel: 'atendente', senha: SENHA } });
+    expect(c.status).toBe(201);
+    const r = await chamar('/auth/entrar', { corpo: { email: login.toUpperCase(), senha: SENHA } });
+    expect(r.status).toBe(200);
+    const ck = cookieDe(r.r);
+    const eu = await chamar('/auth/eu', { cookie: ck });
+    expect(eu.dados.usuario.trocar_senha).toBe(1);
+    const bloq = await chamar('/clientes', { cookie: ck });
+    expect(bloq.status).toBe(403);
+    expect(bloq.dados.codigo).toBe('troca_obrigatoria');
+    expect((await chamar('/auth/senha', { cookie: ck, corpo: { atual: SENHA, nova: 'curta' } })).status).toBe(422);
+    expect((await chamar('/auth/senha', { cookie: ck, corpo: { atual: SENHA, nova: SENHA } })).status).toBe(422);
+    expect((await chamar('/auth/senha', { cookie: ck, corpo: { atual: SENHA, nova: 'minha-senha-nova' } })).status).toBe(200);
+    expect((await chamar('/clientes', { cookie: ck })).status).toBe(200);
+    const dup = await chamar('/usuarios', { cookie: adm, corpo: { nome: 'Outra', email: `x${login}@teste.com`, login, papel: 'atendente', senha: SENHA } });
+    expect(dup.status).toBe(409);
+  });
+
   it('bloqueia requisição vinda de outro site (CSRF)', async () => {
     const r = await chamar('/clientes', { cookie: adm, corpo: { nome: 'Ataque' }, origem: 'https://site-malicioso.com' });
     expect(r.status).toBe(403);

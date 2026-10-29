@@ -33,6 +33,7 @@ const ERROS_BANCO: Array<[RegExp, ErroApp['status'], string, string]> = [
   [/registro_protegido|caixa_imutavel/, 409, 'registro_protegido', 'Este registro não pode ser apagado.'],
   [/UNIQUE constraint failed: cash_movements\.estorno_de/, 409, 'ja_estornado', 'Este lançamento já foi estornado.'],
   [/UNIQUE constraint failed: cash_sessions\.data/, 409, 'caixa_ja_existe', 'O caixa de hoje já foi aberto.'],
+  [/UNIQUE constraint failed: users\.login/, 409, 'login_em_uso', 'Já existe alguém com este nome de usuário.'],
   [/UNIQUE constraint failed: users\.email/, 409, 'email_em_uso', 'Já existe um usuário com este e-mail.'],
   [/UNIQUE constraint failed: (service_catalog|service_categories|measurement_fields|payment_methods|finance_categories)/, 409, 'nome_em_uso', 'Já existe um cadastro com este nome.'],
   [/FOREIGN KEY constraint failed/, 422, 'referencia_invalida', 'Um dos registros informados não existe.'],

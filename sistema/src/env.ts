@@ -17,7 +17,9 @@ export interface Usuario {
   id: string;
   nome: string;
   email: string;
+  login: string | null;
   papel: Papel;
+  trocar_senha: number;
 }
 
 export type AppEnv = {

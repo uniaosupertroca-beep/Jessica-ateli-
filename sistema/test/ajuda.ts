@@ -53,7 +53,11 @@ export async function usuario(cookieAdmin: string, papel: 'atendente' | 'costure
   const c = await chamar('/usuarios', { cookie: cookieAdmin, corpo: { nome: `Pessoa ${papel}`, email, papel, senha: SENHA } });
   if (c.status !== 201) throw new Error('criar usuário falhou ' + JSON.stringify(c.dados));
   const r = await chamar('/auth/entrar', { corpo: { email, senha: SENHA } });
-  return { cookie: cookieDe(r.r), id: c.dados.id as string };
+  const cookie = cookieDe(r.r);
+  // senha criada pelo administrador é temporária: troca no primeiro acesso
+  const t = await chamar('/auth/senha', { cookie, corpo: { atual: SENHA, nova: SENHA + '-nova' } });
+  if (t.status !== 200) throw new Error('troca de senha falhou ' + JSON.stringify(t.dados));
+  return { cookie, id: c.dados.id as string };
 }
 
 export async function cliente(cookie: string, nome = `Cliente ${chave()}`, telefone: string | null = null) {

@@ -28,7 +28,7 @@ function formulario(el, { titulo, texto, campos, botao, enviar }) {
 export function telaLogin(el, aoEntrar) {
   formulario(el, {
     titulo: 'Entrar',
-    campos: `<div class="field"><label for="l-email">E-mail</label><input class="in" id="l-email" name="email" type="email" autocomplete="username" required></div>
+    campos: `<div class="field"><label for="l-email">Usuário ou e-mail</label><input class="in" id="l-email" name="email" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" required></div>
       <div class="field"><label for="l-senha">Senha</label><input class="in" id="l-senha" name="senha" type="password" autocomplete="current-password" required></div>`,
     botao: 'Entrar',
     async enviar(d) {
@@ -50,6 +50,24 @@ export function telaConfigurarInicial(el, aoEntrar) {
     async enviar(d) {
       await api('/auth/configurar', { corpo: d });
       aoEntrar();
+    },
+  });
+}
+
+/** Primeiro acesso com senha inicial: a pessoa escolhe a própria senha antes de usar o sistema. */
+export function telaTrocarSenha(el, aoConcluir) {
+  formulario(el, {
+    titulo: 'Crie sua senha',
+    texto: 'Você entrou com a senha inicial. Para proteger os dados das clientes, escolha uma senha só sua (mínimo 10 caracteres).',
+    campos: `<div class="field"><label for="t-atual">Senha inicial</label><input class="in" id="t-atual" name="atual" type="password" autocomplete="current-password" required></div>
+      <div class="field"><label for="t-nova">Nova senha</label><input class="in" id="t-nova" name="nova" type="password" autocomplete="new-password" minlength="10" required></div>
+      <div class="field"><label for="t-conf">Repita a nova senha</label><input class="in" id="t-conf" name="conf" type="password" autocomplete="new-password" required></div>`,
+    botao: 'Salvar senha e entrar',
+    async enviar(d) {
+      if (d.nova.length < 10) throw new Error('A nova senha precisa ter pelo menos 10 caracteres.');
+      if (d.nova !== d.conf) throw new Error('As duas senhas não são iguais.');
+      await api('/auth/senha', { corpo: { atual: d.atual, nova: d.nova } });
+      aoConcluir();
     },
   });
 }

@@ -46,6 +46,11 @@ async function sha256(s: string) {
   return b64(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)));
 }
 
+/** Normaliza o identificador de login: e-mail em minúsculas ou nome de usuário. */
+export function identificador(texto: string) {
+  return texto.trim().toLowerCase();
+}
+
 export function validarSenhaNova(senha: string) {
   if (senha.length < 10) throw new ErroApp(422, 'senha_fraca', 'A senha precisa ter pelo menos 10 caracteres.');
   if (senha.length > 200) throw new ErroApp(422, 'senha_longa', 'Senha muito longa.');
@@ -73,7 +78,7 @@ export async function exigirLogin(c: Context<AppEnv>, next: Next) {
   if (!token) throw new ErroApp(401, 'nao_autenticado', 'Entre com seu e-mail e senha.');
   const id = await sha256(token);
   const u = await c.env.DB.prepare(
-    `SELECT u.id, u.nome, u.email, u.papel FROM sessions s JOIN users u ON u.id = s.user_id
+    `SELECT u.id, u.nome, u.email, u.login, u.papel, u.trocar_senha FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.id = ? AND s.expira_em > ? AND u.ativo = 1`,
   ).bind(id, agora()).first<Usuario>();
   if (!u) {
@@ -83,6 +88,10 @@ export async function exigirLogin(c: Context<AppEnv>, next: Next) {
   c.set('usuario', u);
   c.set('perms', permissoesDo(u.papel as Papel));
   c.set('sessaoId', id);
+  // Senha inicial/temporária: só permite trocar a senha (e ver os próprios dados ou sair).
+  const livre = /\/auth\/(eu|senha|sair)$/.test(new URL(c.req.url).pathname);
+  if (u.trocar_senha && !livre)
+    throw new ErroApp(403, 'troca_obrigatoria', 'Troque a senha inicial antes de continuar.');
   await next();
 }
 

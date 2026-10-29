@@ -156,22 +156,24 @@ async function abaUsuarios(alvo, depois) {
   alvo.innerHTML = `<div class="panel" style="margin-top:12px"><div class="panel-h"><h2>Equipe</h2><button class="btn pri sm" data-novo>+ Nova pessoa</button></div>
     <p class="ajuda" style="margin:0"><b>Administrador:</b> tudo. <b>Atendente:</b> clientes, OS, recebimentos e caixa (sem alterar preço, estornar ou configurar).
       <b>Costureira:</b> vê as peças atribuídas a ela e atualiza a produção, sem valores.</p>
-    <div class="tw"><table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Desde</th><th></th></tr></thead><tbody>
-      ${usuarios.map(u => `<tr style="${u.ativo ? '' : 'opacity:.5'}"><td>${esc(u.nome)}</td><td>${esc(u.email)}</td><td>${PAP[u.papel]}</td><td>${dataBR(u.criado_em)}</td>
+    <div class="tw"><table><thead><tr><th>Nome</th><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Desde</th><th></th></tr></thead><tbody>
+      ${usuarios.map(u => `<tr style="${u.ativo ? '' : 'opacity:.5'}"><td>${esc(u.nome)}${u.trocar_senha ? ' <span class="pill p-warn">senha inicial</span>' : ''}</td><td>${esc(u.login || '—')}</td><td>${esc(u.email)}</td><td>${PAP[u.papel]}</td><td>${dataBR(u.criado_em)}</td>
         <td class="r"><button class="btn sm" data-ed="${u.id}">Editar</button></td></tr>`).join('')}</tbody></table></div></div>`;
   const form = u => modal({
     title: u ? 'Editar pessoa' : 'Nova pessoa da equipe',
     body: `<div class="grid" style="gap:12px">
       <div class="field"><label class="req" for="u-nome">Nome</label><input class="in" id="u-nome" value="${esc(u?.nome || '')}"></div>
-      ${u ? '' : '<div class="field"><label class="req" for="u-email">E-mail (login)</label><input class="in" id="u-email" type="email"></div>'}
+      ${u ? '' : '<div class="field"><label class="req" for="u-email">E-mail</label><input class="in" id="u-email" type="email"></div>'}
+      <div class="field"><label for="u-login">Usuário para entrar (opcional)</label><input class="in" id="u-login" autocapitalize="none" value="${esc(u?.login || '')}" placeholder="ex.: maria"></div>
       <div class="field"><label for="u-papel">Perfil</label><select class="in" id="u-papel">${Object.entries(PAP).map(([k, l]) => `<option value="${k}" ${u?.papel === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-      <div class="field"><label ${u ? '' : 'class="req"'} for="u-senha">${u ? 'Nova senha (deixe vazio para manter)' : 'Senha inicial (mínimo 10 caracteres)'}</label><input class="in" id="u-senha" type="password" autocomplete="new-password"></div>
+      <div class="field"><label ${u ? '' : 'class="req"'} for="u-senha">${u ? 'Nova senha temporária (deixe vazio para manter)' : 'Senha inicial (mínimo 10 caracteres; a pessoa troca no primeiro acesso)'}</label><input class="in" id="u-senha" type="password" autocomplete="new-password"></div>
       ${u ? `<label class="chk"><input type="checkbox" id="u-ativo" ${u.ativo ? 'checked' : ''}> Acesso ativo</label>` : ''}</div>`,
     actions: [{ label: 'Voltar' }, { label: 'Salvar', cls: 'pri', fn: async m => {
       const senha = $('#u-senha', m).value;
       try {
-        if (u) await api(`/usuarios/${u.id}`, { metodo: 'PATCH', corpo: { nome: $('#u-nome', m).value.trim(), papel: $('#u-papel', m).value, ativo: $('#u-ativo', m).checked, ...(senha && { senha }) } });
-        else await api('/usuarios', { corpo: { nome: $('#u-nome', m).value.trim(), email: $('#u-email', m).value.trim(), papel: $('#u-papel', m).value, senha } });
+        const login = $('#u-login', m).value.trim();
+        if (u) await api(`/usuarios/${u.id}`, { metodo: 'PATCH', corpo: { nome: $('#u-nome', m).value.trim(), papel: $('#u-papel', m).value, ativo: $('#u-ativo', m).checked, login, ...(senha && { senha }) } });
+        else await api('/usuarios', { corpo: { nome: $('#u-nome', m).value.trim(), email: $('#u-email', m).value.trim(), login, papel: $('#u-papel', m).value, senha } });
       } catch (e) { toast(e.message, true); return false; }
       toast('Equipe atualizada.');
       depois();

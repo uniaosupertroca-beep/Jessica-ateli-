@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../env';
 import {
+  identificador,
   criarSessao, encerrarSessao, exigirLogin, gastarTempoDeHash, hashSenha, limparFalhas, registrarFalha,
   validarSenhaNova, verificarBloqueio, verificarSenha,
 } from '../lib/auth';
@@ -41,15 +42,18 @@ rotasAuth.post('/configurar', async c => {
 });
 
 rotasAuth.post('/entrar', async c => {
-  const d = await lerCorpo(c, z.object({ email: zEmail, senha: z.string().min(1, 'Informe a senha.').max(200) }));
+  const d = await lerCorpo(c, z.object({
+    email: z.string().trim().min(1, 'Informe o usuário ou e-mail.').max(200).transform(identificador),
+    senha: z.string().min(1, 'Informe a senha.').max(200),
+  }));
   const chaves = [`email:${d.email}`, `ip:${ip(c)}`];
   await verificarBloqueio(c.env.DB, chaves);
-  const u = await c.env.DB.prepare('SELECT id, senha_hash, ativo FROM users WHERE email = ?')
+  const u = await c.env.DB.prepare('SELECT id, senha_hash, ativo FROM users WHERE email = ?1 OR login = ?1 COLLATE NOCASE')
     .bind(d.email).first<{ id: string; senha_hash: string; ativo: number }>();
   const ok = u ? await verificarSenha(d.senha, u.senha_hash) : (await gastarTempoDeHash(d.senha), false);
   if (!u || !ok || !u.ativo) {
     await registrarFalha(c.env.DB, chaves);
-    throw new ErroApp(401, 'credenciais_invalidas', 'E-mail ou senha incorretos.');
+    throw new ErroApp(401, 'credenciais_invalidas', 'Usuário ou senha incorretos.');
   }
   await limparFalhas(c.env.DB, chaves);
   await criarSessao(c, u.id);
@@ -73,8 +77,9 @@ rotasAuth.post('/senha', exigirLogin, async c => {
   const r = await c.env.DB.prepare('SELECT senha_hash FROM users WHERE id = ?').bind(u.id).first<{ senha_hash: string }>();
   if (!r || !(await verificarSenha(d.atual, r.senha_hash))) throw new ErroApp(422, 'senha_atual', 'A senha atual está incorreta.');
   validarSenhaNova(d.nova);
+  if (d.nova === d.atual) throw new ErroApp(422, 'senha_igual', 'A nova senha precisa ser diferente da atual.');
   await c.env.DB.batch([
-    c.env.DB.prepare('UPDATE users SET senha_hash = ?, atualizado_em = ? WHERE id = ?').bind(await hashSenha(d.nova), agora(), u.id),
+    c.env.DB.prepare('UPDATE users SET senha_hash = ?, trocar_senha = 0, atualizado_em = ? WHERE id = ?').bind(await hashSenha(d.nova), agora(), u.id),
     c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND id <> ?').bind(u.id, c.get('sessaoId')),
     auditoria(c, 'alterar_senha', 'users', u.id),
   ]);

@@ -1,7 +1,7 @@
 // Ponto de entrada: login, menu e navegação entre telas (por endereço #tela/parametro).
 import { api, carregarConfig, ErroApi, sessao } from './api.js';
 import { $, esc, fecharModal, toast } from './ui.js';
-import { telaLogin, telaConfigurarInicial } from './telas/login.js';
+import { telaLogin, telaConfigurarInicial, telaTrocarSenha } from './telas/login.js';
 import { telaInicio } from './telas/inicio.js';
 import { telaOrdens, telaOS, telaImpressao } from './telas/ordens.js';
 import { telaClientes, telaCliente } from './telas/clientes.js';
@@ -129,6 +129,13 @@ export async function iniciar() {
     sessao.eu = eu.usuario;
     sessao.perms = new Set(eu.permissoes);
     sessao.hoje = eu.hoje;
+    if (eu.usuario.trocar_senha) {
+      document.body.classList.add('deslogado');
+      const el = document.createElement('div');
+      $('#main').replaceChildren(el);
+      $('#nav-bottom').innerHTML = '';
+      return telaTrocarSenha(el, iniciar);
+    }
     await carregarConfig();
     document.body.classList.remove('deslogado');
     renderizar();
