@@ -1,7 +1,7 @@
 {
-  // Publica o protótipo estático como Worker "atelie-jessica".
+  // Publica o protótipo estático como Worker "jessica-ateli".
   // Deploy: npx wrangler deploy
-  "name": "atelie-jessica",
+  "name": "jessica-ateli",
   "compatibility_date": "2026-10-01",
   "assets": {
     "directory": "./prototipo"
