@@ -2,6 +2,7 @@ import { api, novaChave, sessao } from '../api.js';
 import { $, brl, dataBR, dataHora, esc, fecharModal, formatarTelefone, modal, nOS, pill, toast } from '../ui.js';
 import { lerValor, linkWhatsApp, MODELOS_MENSAGEM, normalizarTelefone, numeroWhatsApp, valorParaCampo } from '../regras.js';
 import { modalAbrirCaixa, modalEstorno } from './ordens.js';
+import { cabecalhoDoc, estiloDoc } from '../documento.js';
 
 /* =========================================================================
  * Formulário de cliente (usado na tela e no cadastro rápido dentro da OS)
@@ -336,9 +337,8 @@ async function imprimirFicha(el, clientId, fichaId) {
   const v = f.versoes[0];
   const campos = sessao.config.campos_medida.filter(c => v?.valores[c.id] !== undefined);
   el.innerHTML = `<div class="row nao-imprimir"><a class="btn" href="#clientes/${clientId}/medidas">← Voltar</a><button class="btn pri" data-imp>Imprimir / Salvar PDF</button></div>
-    <div class="a4wrap"><div class="a4">
-      <div class="top"><div><h2>${esc(sessao.config.atelie.nome)}</h2><div>Ficha de medidas</div></div>
-        <div style="text-align:right"><div><b>${esc(cliente.nome)}</b></div><div>${esc(f.titulo)}</div><div>Medido em ${v ? dataBR(v.medido_em) : '—'}</div></div></div>
+    <div class="a4wrap"><div class="a4" ${estiloDoc(sessao.config.atelie)}>
+      ${cabecalhoDoc(sessao.config.atelie, 'Ficha de medidas', '', [['Cliente', cliente.nome], ['Ficha', f.titulo], ['Medido em', v ? dataBR(v.medido_em) : '—']])}
       ${f.peca ? `<div class="box">Encomenda: peça ${esc(f.peca_codigo)} · ${esc(f.peca)}</div>` : ''}
       <table><thead><tr><th>Medida</th><th class="r">Centímetros</th></tr></thead><tbody>
         ${campos.map(c => `<tr><td>${esc(c.nome)}</td><td class="r num">${String(v.valores[c.id]).replace('.', ',')}</td></tr>`).join('')}</tbody></table>

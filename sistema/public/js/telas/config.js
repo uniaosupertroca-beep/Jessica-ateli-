@@ -1,12 +1,14 @@
 import { api, carregarConfig, sessao } from '../api.js';
 import { $, brl, dataBR, dataHora, esc, modal, opcoes, toast } from '../ui.js';
 import { duracao, lerValor, valorParaCampo } from '../regras.js';
+import { cabecalhoDoc, estiloDoc, urlLogo } from '../documento.js';
 
 const diasTexto = d => ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'].filter((_, i) => d.includes(String(i))).join(', ');
 
 const ABAS = [
   ['conta', 'Minha conta', () => true],
   ['atelie', 'Ateliê', () => sessao.pode('config.editar')],
+  ['documentos', 'Documentos e logo', () => sessao.pode('config.editar')],
   ['cadastros', 'Pagamentos e medidas', () => sessao.pode('config.editar')],
   ['usuarios', 'Equipe', () => sessao.pode('usuarios.gerenciar')],
   ['auditoria', 'Auditoria', () => sessao.pode('auditoria.ver')],
@@ -24,7 +26,7 @@ export async function telaConfig(el) {
     el.innerHTML = `<div class="head"><div><h1>${abas.length > 1 ? 'Configurações' : 'Minha conta'}</h1><p>As mudanças valem na hora para todo o sistema.</p></div></div>
       ${abas.length > 1 ? `<div class="tabs">${abas.map(([k, l]) => `<button class="${aba === k ? 'on' : ''}" data-aba="${k}">${l}</button>`).join('')}</div>` : ''}<div id="cfg"></div>`;
     const alvo = $('#cfg', el);
-    await { conta: abaConta, atelie: abaAtelie, cadastros: abaCadastros, usuarios: abaUsuarios, auditoria: abaAuditoria, backup: abaBackup }[aba](alvo, desenhar);
+    await { conta: abaConta, atelie: abaAtelie, documentos: abaDocumentos, cadastros: abaCadastros, usuarios: abaUsuarios, auditoria: abaAuditoria, backup: abaBackup }[aba](alvo, desenhar);
   };
   el.onclick = e => {
     const b = e.target.closest('[data-aba]');
@@ -191,4 +193,81 @@ async function abaAuditoria(alvo) {
     carregar();
   };
   await carregar();
+}
+
+/** Logo (guardado no próprio sistema, privado), cor e textos dos documentos impressos — com prévia ao vivo. */
+function abaDocumentos(alvo, depois) {
+  const a = { ...sessao.config.atelie };
+  const logo = urlLogo(a);
+  alvo.innerHTML = `<div class="grid s12" style="margin-top:12px;align-items:start">
+    <div class="grid" style="gap:16px">
+      <div class="panel"><h2>Logo</h2>
+        ${logo ? `<img class="logo-atual" src="${logo}" alt="Logo atual">` : '<div class="empty">Nenhum logo enviado. Os documentos usam o nome do ateliê.</div>'}
+        <div class="row"><label class="btn pri sm" style="cursor:pointer">${logo ? 'Trocar logo' : 'Enviar logo'}<input type="file" id="d-logo" accept="image/png,image/jpeg,image/webp" hidden></label>
+          ${logo ? '<button class="btn sm danger" id="d-tirar">Remover</button>' : ''}</div>
+        <p class="ajuda" style="margin:0">PNG (de preferência com fundo transparente), JPG ou WebP, até 2 MB. O arquivo fica guardado no sistema, de forma privada: só aparece para quem está logado e nos impressos.</p></div>
+      <div class="panel"><h2>Aparência</h2>
+        <div class="row"><label for="d-cor">Cor dos documentos</label><input type="color" id="d-cor" value="${esc(a.doc_cor || '#C92D6A')}" style="width:56px;height:40px;border:none;background:none;padding:0">
+          <span class="ajuda">títulos, linhas e cabeçalho das tabelas</span></div>
+        <label class="chk"><input type="checkbox" id="d-etq" ${a.doc_logo_etiqueta ? 'checked' : ''}> Mostrar o logo nas etiquetas</label>
+        <label class="chk"><input type="checkbox" id="d-tel" ${a.doc_mostrar_telefone_cliente ? 'checked' : ''}> Mostrar o telefone da cliente nos documentos</label></div>
+      <div class="panel"><h2>Textos</h2>
+        <div class="field"><label for="d-cab">Linha extra no cabeçalho</label><input class="in" id="d-cab" value="${esc(a.doc_cabecalho || '')}" placeholder="ex.: @ateliejessica · seg a sex 9h–18h"></div>
+        <div class="field"><label for="d-rod">Rodapé (termos da OS e comprovantes)</label><textarea class="in" id="d-rod" rows="3">${esc(a.rodape_os || '')}</textarea></div>
+        <div class="grid g2" style="gap:10px"><div class="field"><label for="d-val">Validade do orçamento (dias)</label><input class="in num" type="number" min="1" max="365" id="d-val" value="${a.doc_validade_orcamento_dias || 7}"></div>
+          <div class="field"><label for="d-ass">Nome na assinatura do ateliê</label><input class="in" id="d-ass" value="${esc(a.doc_assinatura || '')}" placeholder="${esc(a.nome)}"></div></div>
+        <div class="field"><label for="d-orc">Condições do orçamento</label><textarea class="in" id="d-orc" rows="3">${esc(a.doc_termos_orcamento || '')}</textarea></div>
+        <div class="field"><label for="d-ret">Texto do comprovante de retirada</label><textarea class="in" id="d-ret" rows="2">${esc(a.doc_texto_retirada || '')}</textarea></div>
+        <button class="btn pri" id="d-salvar">Salvar documentos</button></div>
+    </div>
+    <div class="panel" style="position:sticky;top:12px"><div class="panel-h"><h2>Prévia</h2><span class="ajuda">como sai no papel</span></div>
+      <div class="a4 previa-doc" id="d-previa"></div>
+      <p class="ajuda" style="margin:0">Para imprimir de verdade, abra uma OS e toque em "Documentos / PDF".</p></div></div>`;
+  const ler = () => ({
+    doc_cor: $('#d-cor', alvo).value, doc_cabecalho: $('#d-cab', alvo).value.trim(), rodape_os: $('#d-rod', alvo).value.trim(),
+    doc_termos_orcamento: $('#d-orc', alvo).value.trim(), doc_validade_orcamento_dias: Number($('#d-val', alvo).value) || 7,
+    doc_texto_retirada: $('#d-ret', alvo).value.trim(), doc_assinatura: $('#d-ass', alvo).value.trim(),
+    doc_logo_etiqueta: $('#d-etq', alvo).checked, doc_mostrar_telefone_cliente: $('#d-tel', alvo).checked,
+  });
+  const previa = () => {
+    const x = { ...a, ...ler() };
+    const p = $('#d-previa', alvo);
+    p.setAttribute('style', estiloDoc(x).slice(7, -1));
+    p.innerHTML = `${cabecalhoDoc(x, 'Orçamento', 'Nº 0142', [['Abertura', '29/10/2026'], ['Prazo', '05/11/2026']])}
+      <div class="box" style="margin-top:10px"><b>Cliente:</b> Mariana Souza${x.doc_mostrar_telefone_cliente ? ' · <b>Telefone:</b> (11) 98765-4321' : ''}</div>
+      <table style="margin-top:10px"><thead><tr><th>Peça</th><th>Serviço</th><th class="r">Valor</th></tr></thead><tbody><tr><td>Calça jeans</td><td>Barra italiana</td><td class="r num">R$ 35,00</td></tr></tbody></table>
+      ${x.doc_termos_orcamento ? `<p style="white-space:pre-line">${esc(x.doc_termos_orcamento)}</p>` : ''}
+      ${x.rodape_os ? `<div style="font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:8px;white-space:pre-line">${esc(x.rodape_os)}</div>` : ''}
+      <div class="ass" style="padding-top:24px"><div>Aprovação da cliente</div><div>${esc(x.doc_assinatura || x.nome)}</div></div>`;
+  };
+  alvo.addEventListener('input', previa);
+  alvo.addEventListener('change', previa);
+  previa();
+  $('#d-salvar', alvo).onclick = async e => {
+    e.target.disabled = true;
+    try { await api('/config/documentos', { metodo: 'PATCH', corpo: ler() }); toast('Documentos salvos.'); depois(); } catch (er) { toast(er.message, true); e.target.disabled = false; }
+  };
+  $('#d-tirar', alvo)?.addEventListener('click', async () => {
+    try { await api('/config/logo', { metodo: 'DELETE' }); toast('Logo removido.'); depois(); } catch (er) { toast(er.message, true); }
+  });
+  $('#d-logo', alvo).onchange = async e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    try {
+      // Logos grandes são reduzidos para até 1200 px em PNG (mantém transparência).
+      let envio = f;
+      const img = await createImageBitmap(f);
+      if (f.size > 1.5 * 1024 * 1024 || Math.max(img.width, img.height) > 1200) {
+        const k = Math.min(1, 1200 / Math.max(img.width, img.height));
+        const cv = Object.assign(document.createElement('canvas'), { width: Math.round(img.width * k), height: Math.round(img.height * k) });
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        envio = await new Promise(ok => cv.toBlob(ok, 'image/png'));
+      }
+      const fd = new FormData();
+      fd.append('arquivo', new File([envio], 'logo.png', { type: envio.type || f.type }));
+      await api('/config/logo', { form: fd });
+      toast('Logo atualizado.');
+      depois();
+    } catch (er) { toast(er.message || 'Não foi possível ler a imagem.', true); }
+  };
 }

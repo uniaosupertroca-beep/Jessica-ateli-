@@ -8,11 +8,88 @@ import { agora, exigir, lerCorpo, pode, uuid, zCentavos } from '../lib/util';
 export const rotasConfig = new Hono<AppEnv>();
 
 export async function lerConfigAtelie(db: D1Database) {
-  return (await db.prepare(`SELECT nome, telefone, endereco, documento, rodape_os, capacidade_diaria, limite_quase_cheio, custo_hora_centavos,
-      despesas_indiretas_pct, margem_pct, capacidade_provas_dia, horario_inicio, horario_fim FROM system_settings WHERE id = 1`)
+  const r = (await db.prepare(`SELECT nome, telefone, endereco, documento, rodape_os, capacidade_diaria, limite_quase_cheio, custo_hora_centavos,
+      despesas_indiretas_pct, margem_pct, capacidade_provas_dia, horario_inicio, horario_fim, logo_key, doc_cor, doc_cabecalho, doc_termos_orcamento,
+      doc_validade_orcamento_dias, doc_texto_retirada, doc_assinatura, doc_logo_etiqueta, doc_mostrar_telefone_cliente FROM system_settings WHERE id = 1`)
     .first<{ nome: string; telefone: string; endereco: string; documento: string; rodape_os: string; capacidade_diaria: number; limite_quase_cheio: number;
-      custo_hora_centavos: number; despesas_indiretas_pct: number; margem_pct: number; capacidade_provas_dia: number; horario_inicio: string; horario_fim: string }>())!;
+      custo_hora_centavos: number; despesas_indiretas_pct: number; margem_pct: number; capacidade_provas_dia: number; horario_inicio: string; horario_fim: string;
+      logo_key: string | null; doc_cor: string; doc_cabecalho: string; doc_termos_orcamento: string; doc_validade_orcamento_dias: number;
+      doc_texto_retirada: string; doc_assinatura: string; doc_logo_etiqueta: number; doc_mostrar_telefone_cliente: number }>())!;
+  // A chave interna do arquivo não sai do servidor; a tela recebe só uma "versão" para o cache da imagem.
+  const { logo_key, ...resto } = r;
+  return { ...resto, logo_versao: logo_key ? logo_key.split('/').pop()!.split('.')[0] : null };
 }
+
+/* ---------- logo do ateliê (guardado no R2 privado; só quem está logado vê) ---------- */
+const TIPOS_LOGO: Array<[(b: Uint8Array) => boolean, string, string]> = [
+  [b => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47, 'image/png', 'png'],
+  [b => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff, 'image/jpeg', 'jpg'],
+  [b => b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45, 'image/webp', 'webp'],
+];
+
+rotasConfig.post('/logo', async c => {
+  exigir(c, 'config.editar');
+  const corpo = await c.req.parseBody();
+  const arq = corpo['arquivo'];
+  if (!(arq instanceof File)) throw new ErroApp(422, 'sem_arquivo', 'Escolha a imagem do logo.');
+  if (arq.size > 2 * 1024 * 1024) throw new ErroApp(413, 'arquivo_grande', 'O logo passa de 2 MB.');
+  const bytes = new Uint8Array(await arq.arrayBuffer());
+  const tipo = TIPOS_LOGO.find(([t]) => t(bytes));
+  if (!tipo) throw new ErroApp(415, 'formato_invalido', 'Envie o logo em PNG, JPG ou WebP.');
+  const antigo = await c.env.DB.prepare('SELECT logo_key FROM system_settings WHERE id = 1').first<{ logo_key: string | null }>();
+  const chave = `marca/logo-${uuid()}.${tipo[2]}`;
+  await c.env.FOTOS.put(chave, bytes, { httpMetadata: { contentType: tipo[1] } });
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE system_settings SET logo_key = ?, logo_tipo = ?, atualizado_em = ? WHERE id = 1').bind(chave, tipo[1], agora()),
+    auditoria(c, 'enviar_logo', 'system_settings', '1', { tamanho: bytes.length }),
+  ]);
+  if (antigo?.logo_key) await c.env.FOTOS.delete(antigo.logo_key);
+  return c.json({ ok: true }, 201);
+});
+
+rotasConfig.delete('/logo', async c => {
+  exigir(c, 'config.editar');
+  const antigo = await c.env.DB.prepare('SELECT logo_key FROM system_settings WHERE id = 1').first<{ logo_key: string | null }>();
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE system_settings SET logo_key = NULL, logo_tipo = NULL, atualizado_em = ? WHERE id = 1').bind(agora()),
+    auditoria(c, 'remover_logo', 'system_settings', '1'),
+  ]);
+  if (antigo?.logo_key) await c.env.FOTOS.delete(antigo.logo_key);
+  return c.json({ ok: true });
+});
+
+rotasConfig.get('/logo', async c => {
+  const r = await c.env.DB.prepare('SELECT logo_key, logo_tipo FROM system_settings WHERE id = 1').first<{ logo_key: string | null; logo_tipo: string }>();
+  const obj = r?.logo_key ? await c.env.FOTOS.get(r.logo_key) : null;
+  if (!obj) throw naoEncontrado('Logo');
+  return new Response(obj.body, {
+    headers: { 'Content-Type': r!.logo_tipo, 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'" },
+  });
+});
+
+/* ---------- textos e aparência dos documentos ---------- */
+rotasConfig.patch('/documentos', async c => {
+  exigir(c, 'config.editar');
+  const d = await lerCorpo(c, z.object({
+    doc_cor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Cor inválida.'),
+    doc_cabecalho: z.string().trim().max(300).default(''),
+    rodape_os: z.string().trim().max(1500).default(''),
+    doc_termos_orcamento: z.string().trim().max(1500).default(''),
+    doc_validade_orcamento_dias: z.number().int().min(1, 'Validade mínima de 1 dia.').max(365),
+    doc_texto_retirada: z.string().trim().max(800).default(''),
+    doc_assinatura: z.string().trim().max(120).default(''),
+    doc_logo_etiqueta: z.boolean().default(true),
+    doc_mostrar_telefone_cliente: z.boolean().default(true),
+  }));
+  await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE system_settings SET doc_cor = ?, doc_cabecalho = ?, rodape_os = ?, doc_termos_orcamento = ?, doc_validade_orcamento_dias = ?,
+        doc_texto_retirada = ?, doc_assinatura = ?, doc_logo_etiqueta = ?, doc_mostrar_telefone_cliente = ?, atualizado_em = ? WHERE id = 1`)
+      .bind(d.doc_cor, d.doc_cabecalho, d.rodape_os, d.doc_termos_orcamento, d.doc_validade_orcamento_dias, d.doc_texto_retirada, d.doc_assinatura,
+        d.doc_logo_etiqueta ? 1 : 0, d.doc_mostrar_telefone_cliente ? 1 : 0, agora()),
+    auditoria(c, 'editar_documentos', 'system_settings', '1', d),
+  ]);
+  return c.json({ ok: true });
+});
 
 /** Tudo o que as telas precisam para montar formulários. */
 rotasConfig.get('/', async c => {

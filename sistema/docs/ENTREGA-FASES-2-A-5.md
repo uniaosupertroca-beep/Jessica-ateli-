@@ -50,7 +50,7 @@ Data: 29/10/2026. Situação: **em homologação**, publicado em `jessica-ateli-
 
 | Verificação | Resultado |
 |---|---|
-| Testes automáticos (Vitest + Miniflare, banco e R2 reais em memória) | **60 de 60 passaram** |
+| Testes automáticos (Vitest + Miniflare, banco e R2 reais em memória) | **62 de 62 passaram** |
 | Fluxo no navegador (Playwright) | Fluxo completo sem erros de JavaScript, de ponta a ponta: configuração, equipe, calculadora, OS com 2 peças, Kanban, prova com conflito e encaixe justificado, estoque (10 m → consumo de 1,5 m → **8,5 m**), 5 documentos, etiquetas com QR, leitura `#p/1-2`, conta a pagar, relatórios com CSV e gráfico com dica, agenda dia, pesquisa geral e manifesto. |
 | Celular (390 px) | Costureira entra pelo usuário, troca a senha inicial e usa o Kanban **sem ver valores** e sem rolagem lateral. |
 | Restauração de backup (com estoque, agenda e contas) | Contagens, saldos (8,5 m), status de contas e **35 travas** idênticos ao original. |
@@ -92,6 +92,16 @@ Todos os 20 critérios estão atendidos no ambiente de homologação. Exceções
 - **Lucro estimado:** depende do custo da hora informado em Configurações. Sem ele, desconta só os materiais, e a tela avisa.
 - **Gráfico de pizza:** "recebido por forma de pagamento" e "despesas por categoria" são **barras horizontais**, que permitem comparar valores com mais precisão.
 
+## Documentos personalizados (pedido posterior)
+
+Em **Configurações → Documentos e logo**:
+- **Logo:** PNG, JPG ou WebP, até 2 MB. Fica guardado no próprio sistema (armazenamento privado do R2) e é servido só para quem está logado. Não há link público nem serviço externo. Arquivos SVG são recusados por segurança.
+- **Aparência:** cor dos documentos (títulos, linhas e cabeçalho das tabelas), logo nas etiquetas (sim/não) e telefone da cliente nos documentos (sim/não).
+- **Textos:** linha extra no cabeçalho (Instagram, horário), rodapé, validade e condições do orçamento, texto do comprovante de retirada e nome na assinatura.
+- **Prévia ao vivo** enquanto edita.
+
+Tudo vale para OS, orçamento, ordem de produção, comprovantes de pagamento e retirada, ficha de medidas e etiquetas. Na impressão as cores saem como na tela.
+
 ## Migrations
 
 | Arquivo | O que faz |
@@ -99,5 +109,6 @@ Todos os 20 critérios estão atendidos no ambiente de homologação. Exceções
 | `0001_fundacao.sql` | Base (Fase 1) |
 | `0002_login_por_usuario.sql` | Login por usuário e troca de senha obrigatória |
 | `0003_producao_agenda_estoque.sql` | Produção, agenda, estoque, fornecedores, compras e contas a pagar |
+| `0004_documentos_personalizados.sql` | Logo, cor e textos dos documentos |
 
 Todas já estão aplicadas na homologação.

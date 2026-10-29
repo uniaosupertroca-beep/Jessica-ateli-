@@ -270,3 +270,43 @@ describe('pesquisa geral e auditoria', () => {
     expect((await chamar('/auditoria', { cookie: at.cookie })).status).toBe(403);
   });
 });
+
+describe('documentos personalizados e logo', () => {
+  const png = () => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0, 1, 2, 3]);
+  it('guarda o logo no sistema, só mostra para quem está logado e troca sem deixar arquivo velho', async () => {
+    const fd = new FormData();
+    fd.append('arquivo', new File([png()], 'logo.png', { type: 'image/png' }));
+    expect((await chamar('/config/logo', { cookie: adm, form: fd })).status).toBe(201);
+    const cfg = (await chamar('/config', { cookie: adm })).dados.atelie;
+    expect(cfg.logo_versao).toBeTruthy();
+    expect(cfg.logo_key).toBeUndefined(); // a chave interna não sai do servidor
+    const img = await chamar('/config/logo', { cookie: adm });
+    expect(img.status).toBe(200);
+    expect(img.r.headers.get('Content-Type')).toBe('image/png');
+    expect(img.r.headers.get('Cache-Control')).toContain('private');
+    expect((await chamar('/config/logo')).status).toBe(401);
+    const svg = new FormData();
+    svg.append('arquivo', new File(['<svg onload="alert(1)"/>'], 'x.svg', { type: 'image/svg+xml' }));
+    expect((await chamar('/config/logo', { cookie: adm, form: svg })).status).toBe(415);
+    const fd2 = new FormData();
+    fd2.append('arquivo', new File([png()], 'logo2.png', { type: 'image/png' }));
+    await chamar('/config/logo', { cookie: adm, form: fd2 });
+    const { env } = await import('cloudflare:workers');
+    const lista = await (env as unknown as { FOTOS: R2Bucket }).FOTOS.list({ prefix: 'marca/' });
+    expect(lista.objects).toHaveLength(1);
+    expect((await chamar('/config/logo', { cookie: adm, metodo: 'DELETE' })).status).toBe(200);
+    expect((await chamar('/config/logo', { cookie: adm })).status).toBe(404);
+  });
+
+  it('salva cor e textos; recusa cor inválida; só administradora altera', async () => {
+    const corpo = { doc_cor: '#1A5D8F', doc_cabecalho: '@ateliejessica', rodape_os: 'Termos', doc_termos_orcamento: 'Condições', doc_validade_orcamento_dias: 15,
+      doc_texto_retirada: 'Retirei e conferi.', doc_assinatura: 'Jessica Lima', doc_logo_etiqueta: false, doc_mostrar_telefone_cliente: false };
+    expect((await chamar('/config/documentos', { cookie: adm, metodo: 'PATCH', corpo })).status).toBe(200);
+    const a = (await chamar('/config', { cookie: adm })).dados.atelie;
+    expect(a).toMatchObject({ doc_cor: '#1A5D8F', doc_validade_orcamento_dias: 15, doc_assinatura: 'Jessica Lima', doc_logo_etiqueta: 0 });
+    expect((await chamar('/config/documentos', { cookie: adm, metodo: 'PATCH', corpo: { ...corpo, doc_cor: 'red;background:url(x)' } })).status).toBe(422);
+    const at = await usuario(adm, 'atendente');
+    expect((await chamar('/config/documentos', { cookie: at.cookie, metodo: 'PATCH', corpo })).status).toBe(403);
+    expect((await chamar('/config/logo', { cookie: at.cookie })).status).toBe(404); // vê o logo (se houver), não altera
+  });
+});

@@ -8,6 +8,7 @@ import {
 } from '../regras.js';
 import { modalNovaCliente } from './clientes.js';
 import { modalCompromisso } from './agenda.js';
+import { assinaturaAtelie, cabecalhoDoc, estiloDoc, urlLogo } from '../documento.js';
 
 /* =========================================================================
  * LISTA DE OS
@@ -849,10 +850,11 @@ export async function telaImpressao(el, params) {
     const { default: qrcode } = await import('../vendor/qrcode.mjs');
     const qr = texto => { const q = qrcode(0, 'M'); q.addData(texto); q.make(); return q.createSvgTag({ cellSize: 3, margin: 0, scalable: true }); };
     // O QR leva só o código da peça (sem nome ou telefone da cliente); abrir exige login.
+    const logo = atelie.doc_logo_etiqueta && urlLogo(atelie);
     $('#etqs', el).innerHTML = os.itens.map(i => `<div class="etiqueta">${qr(`${location.origin}/#p/${i.codigo}`)}
-      <div><small>${esc(atelie.nome)}</small><b>${esc(i.codigo)}</b><small>${nOS(os.numero)} · ${esc(i.peca.slice(0, 28))}</small><small>Prazo ${dataBR(i.prazo || os.prazo)}</small></div></div>`).join('');
+      <div>${logo ? `<img class="et-logo" src="${logo}" alt="">` : `<small>${esc(atelie.nome)}</small>`}<b>${esc(i.codigo)}</b><small>${nOS(os.numero)} · ${esc(i.peca.slice(0, 28))}</small><small>Prazo ${dataBR(i.prazo || os.prazo)}</small></div></div>`).join('');
   } else {
-    const fone = os.cliente.telefone ? formatarTelefone(os.cliente.telefone) : '—';
+    const fone = os.cliente.telefone && atelie.doc_mostrar_telefone_cliente ? formatarTelefone(os.cliente.telefone) : '';
     const pagos = (os.pagamentos || []).filter(p => !p.estornado_por && !p.estorno_de);
     let fichas = [];
     if (tipo === 'producao' && sessao.pode('medidas.ver') && sessao.pode('clientes.ver'))
@@ -874,7 +876,8 @@ export async function telaImpressao(el, params) {
           ${pagos.length ? '<b>Pagamentos</b><br>' + pagos.map(p => `${dataBR(p.data)} · ${esc(p.forma)} · ${brl(p.valor_centavos)}`).join('<br>') : ''}
           ${os.observacoes ? `<div style="margin-top:10px"><b>Observações</b><br>${esc(os.observacoes)}</div>` : ''}</div>${totais}</div>`,
       orcamento: () => `${tabela}<div style="display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap"><div style="flex:1;min-width:200px">
-          <p>Orçamento válido por 7 dias a partir de ${dataBR(sessao.hoje)}. Prazo estimado de entrega: <b>${dataBR(os.prazo)}</b>, contado a partir da aprovação.</p>
+          <p>Válido até <b>${dataBR(somarDias(sessao.hoje, atelie.doc_validade_orcamento_dias || 7))}</b>. Prazo estimado de entrega: <b>${dataBR(os.prazo)}</b>.</p>
+          ${atelie.doc_termos_orcamento ? `<p style="white-space:pre-line">${esc(atelie.doc_termos_orcamento)}</p>` : ''}
           ${os.observacoes ? `<p><b>Observações:</b> ${esc(os.observacoes)}</p>` : ''}</div>${totais}</div>`,
       producao: () => `${tabela}${os.observacoes ? `<div class="box"><b>Observações da OS:</b> ${esc(os.observacoes)}</div>` : ''}
         ${os.compromissos?.filter(c => c.tipo === 'prova' && c.status === 'agendado').length ? `<div class="box"><b>Provas agendadas:</b> ${os.compromissos.filter(c => c.tipo === 'prova' && c.status === 'agendado').map(c => `${dataBR(c.dia)}${c.hora_inicio ? ' ' + esc(c.hora_inicio) : ''}`).join(', ')}</div>` : ''}
@@ -884,21 +887,18 @@ export async function telaImpressao(el, params) {
           ${pagos.map(p => `<tr><td>${dataBR(p.data)}</td><td>${esc(p.descricao)}</td><td>${esc(p.forma)}</td><td class="r num">${brl(p.valor_centavos)}</td></tr>`).join('') || '<tr><td colspan="4">Nenhum pagamento.</td></tr>'}</tbody></table>
         <div style="display:flex;justify-content:flex-end">${totais}</div>
         <p>Recebemos de <b>${esc(os.cliente.nome)}</b> o valor de <b>${brl(os.pago)}</b> referente à ${nOS(os.numero)}.</p>`,
-      retirada: () => `<p>Declaro que retirei as peças abaixo, conferidas, referentes à ${nOS(os.numero)}${os.entregue_em ? `, em ${dataBR(os.entregue_em.slice(0, 10))}` : ''}.</p>
+      retirada: () => `<p style="white-space:pre-line">${esc(atelie.doc_texto_retirada || 'Declaro que retirei as peças abaixo.')} Referente à ${nOS(os.numero)}${os.entregue_em ? `, em ${dataBR(os.entregue_em.slice(0, 10))}` : ''}.</p>
         <table><thead><tr><th>Código</th><th>Peça</th><th>Serviços</th></tr></thead><tbody>${os.itens.map(i => `<tr><td class="num">${esc(i.codigo)}</td><td>${esc(i.peca)}</td>
           <td>${i.servicos.map(s => esc(s.descricao)).join(', ')}</td></tr>`).join('')}</tbody></table>
         ${verValores ? `<p>${os.saldo > 0 ? `<b>Saldo pendente na retirada: ${brl(os.saldo)}</b>` : 'Serviço totalmente pago.'}</p>` : ''}`,
     }[tipo]();
-    el.innerHTML = barra + `<div class="a4wrap"><div class="a4">
-      <div class="top"><div><h2>${esc(atelie.nome)}</h2><div>${esc(atelie.endereco)}</div><div>${esc(atelie.telefone)}${atelie.documento ? ' · ' + esc(atelie.documento) : ''}</div></div>
-        <div style="text-align:right"><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.08em">${esc(titulo)}</div>
-          <div style="font-size:22px;font-weight:700" class="num">${nOS(os.numero)}</div>
-          <div>Abertura: <b>${dataBR(os.aberta_em)}</b></div><div>Prazo: <b>${dataBR(os.prazo)}</b></div></div></div>
+    el.innerHTML = barra + `<div class="a4wrap"><div class="a4" ${estiloDoc(atelie)}>
+      ${cabecalhoDoc(atelie, titulo, nOS(os.numero), [['Abertura', dataBR(os.aberta_em)], ['Prazo', dataBR(os.prazo)]])}
       ${tipo === 'producao' ? `<div class="box"><b>Cliente:</b> ${esc(os.cliente.nome)} · <b>Documento interno — sem valores</b></div>`
-        : `<div class="box"><b>Cliente:</b> ${esc(os.cliente.nome)} &nbsp;·&nbsp; <b>Telefone:</b> ${esc(fone)}</div>`}
+        : `<div class="box"><b>Cliente:</b> ${esc(os.cliente.nome)}${fone ? ` &nbsp;·&nbsp; <b>Telefone:</b> ${esc(fone)}` : ''}</div>`}
       ${corpo}
-      ${tipo === 'producao' ? '' : `<div style="font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:8px">${esc(atelie.rodape_os)}</div>`}
-      <div class="ass"><div>${tipo === 'orcamento' ? 'Aprovação da cliente' : tipo === 'producao' ? 'Responsável pela produção' : 'Assinatura da cliente'}</div><div>${esc(atelie.nome)}</div></div>
+      ${tipo === 'producao' || !atelie.rodape_os ? '' : `<div style="font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:8px;white-space:pre-line">${esc(atelie.rodape_os)}</div>`}
+      <div class="ass"><div>${tipo === 'orcamento' ? 'Aprovação da cliente' : tipo === 'producao' ? 'Responsável pela produção' : 'Assinatura da cliente'}</div><div>${assinaturaAtelie(atelie)}</div></div>
     </div></div>`;
   }
   el.onclick = e => { if (e.target.closest('[data-imprimir]')) window.print(); };
