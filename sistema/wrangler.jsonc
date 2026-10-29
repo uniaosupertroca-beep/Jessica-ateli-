@@ -1,0 +1,54 @@
+{
+  // Ateliê Jessica — sistema de gestão (Worker + D1 + R2).
+  // Antes do primeiro deploy, crie os recursos e preencha os ids (veja docs/IMPLANTACAO.md).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jessica-ateli-sistema",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "atelie-jessica-db",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    { "binding": "FOTOS", "bucket_name": "atelie-jessica-fotos" },
+    { "binding": "BACKUPS", "bucket_name": "atelie-jessica-backups" }
+  ],
+  // Backup diário às 03:17 de Brasília (06:17 UTC).
+  "triggers": { "crons": ["17 6 * * *"] },
+  "vars": { "AMBIENTE": "producao", "BACKUP_RETENCAO_DIAS": "30" },
+  // Limite por IP para a API: 600 requisições por minuto.
+  "ratelimits": [{ "name": "LIMITE_API", "namespace_id": "4101", "simple": { "limit": 600, "period": 60 } }],
+  "observability": { "enabled": true },
+
+  "env": {
+    // Homologação: banco e buckets próprios, nunca compartilhados com produção.
+    "homologacao": {
+      "name": "jessica-ateli-homologacao",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "atelie-jessica-db-homologacao",
+          "database_id": "00000000-0000-0000-0000-000000000001",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        { "binding": "FOTOS", "bucket_name": "atelie-jessica-fotos-homologacao" },
+        { "binding": "BACKUPS", "bucket_name": "atelie-jessica-backups-homologacao" }
+      ],
+      "triggers": { "crons": ["17 6 * * *"] },
+      "vars": { "AMBIENTE": "homologacao", "BACKUP_RETENCAO_DIAS": "7" },
+      "ratelimits": [{ "name": "LIMITE_API", "namespace_id": "4102", "simple": { "limit": 600, "period": 60 } }]
+    }
+  }
+}
