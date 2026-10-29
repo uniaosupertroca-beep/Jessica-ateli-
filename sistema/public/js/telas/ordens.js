@@ -2,6 +2,7 @@ import { api, ErroApi, novaChave, sessao } from '../api.js';
 import {
   $, $$, brl, comBotao, confirmar, dataBR, dataHora, dataSemana, esc, fecharModal, formatarTelefone, modal, nOS, opcoes, pill, pillProd, tagUn, toast,
 } from '../ui.js';
+import { baixarPDF, nomeArquivo } from '../pdf.js';
 import {
   duracao, FLUXO_OS, STATUS_DE_PRODUCAO, TIPOS_AGENDA, lerQuantidade, lerValor, linkWhatsApp, montarMensagem, MODELOS_MENSAGEM, numeroWhatsApp, situacaoDia, somarDias,
   STATUS_OS, STATUS_PRODUCAO, subtotal, transicoesManuais, UNIDADES, valorParaCampo,
@@ -136,7 +137,7 @@ function desenhar(ctx) {
         <h1>${salva ? 'OS ' + nOS(f.numero) + tagUn(os?.unidade_sigla) : 'Nova ordem de serviço'}</h1>
         <p>${salva ? `Aberta em ${dataBR(f.aberta_em)}${os?.unidade_nome && sessao.unidades.length > 1 ? ' · ' + esc(os.unidade_nome) : ''} · ${pill(f.status)}`
           : sessao.unidades.length > 1 ? (sessao.unidade ? `Será aberta em <b>${esc(sessao.unidades.find(u => u.id === sessao.unidade)?.nome || '')}</b>. O número é gerado ao salvar.` : '<b>Escolha a unidade no topo da tela antes de salvar.</b>') : 'O número é gerado ao salvar.'}</p></div>
-      <div class="row nao-imprimir">${salva ? `<a class="btn" href="#ordens/${f.id}/imprimir">Documentos / PDF</a><a class="btn" href="#ordens/${f.id}/etiquetas">Etiquetas</a>` : ''}
+      <div class="row nao-imprimir">${salva ? `<a class="btn" href="#ordens/${f.id}/imprimir">Imprimir / PDF</a><a class="btn" href="#ordens/${f.id}/etiquetas">Etiquetas</a>` : ''}
         ${ed ? `<button class="btn pri" data-a="salvar">${salva ? 'Salvar alterações' : 'Salvar OS'}</button>` : ''}</div></div>
     ${salva ? painelStatus(ctx) : ''}
     <div class="panel"><h2>Cliente e prazos</h2>
@@ -837,7 +838,7 @@ export async function telaImpressao(el, params) {
   const barra = `<div class="row nao-imprimir"><a class="btn" href="#ordens/${os.id}">← Voltar para a OS</a>
       <select class="in" id="doc-tipo" style="width:auto" aria-label="Documento">${tiposDisp.map(([k, l]) => `<option value="${k}" ${k === tipo ? 'selected' : ''}>${l}</option>`).join('')}</select>
       ${tipo === 'etiquetas' ? `<select class="in" id="et-fmt" style="width:auto" aria-label="Formato"><option value="a4-3">A4 · 3 por linha</option><option value="a4-2">A4 · 2 por linha</option><option value="termica">Etiqueta 60 × 40 mm</option></select>` : ''}
-      <button class="btn pri" data-imprimir>Imprimir / Salvar PDF</button><span class="ajuda">No celular, escolha "Salvar como PDF" na tela de impressão.</span></div>`;
+      <button class="btn" data-imprimir>Imprimir</button><button class="btn pri" data-pdf>Baixar PDF</button></div>`;
   if (tipo === 'etiquetas') {
     el.innerHTML = barra + `<div class="a4wrap"><div class="etiquetas a4-3" id="etqs"></div></div>`;
     // Etiqueta para prender na peça: identifica pela cliente e pela peça (sem QR Code).
@@ -894,7 +895,22 @@ export async function telaImpressao(el, params) {
       <div class="ass"><div>${tipo === 'orcamento' ? 'Aprovação da cliente' : tipo === 'producao' ? 'Responsável pela produção' : 'Assinatura da cliente'}</div><div>${assinaturaAtelie(atelie)}</div></div>
     </div></div>`;
   }
-  el.onclick = e => { if (e.target.closest('[data-imprimir]')) window.print(); };
+  el.onclick = async e => {
+    if (e.target.closest('[data-imprimir]')) return window.print();
+    const b = e.target.closest('[data-pdf]');
+    if (!b) return;
+    const termica = tipo === 'etiquetas' && $('#et-fmt', el)?.value === 'termica';
+    const alvo = tipo === 'etiquetas' ? $('#etqs', el) : $('.a4', el);
+    b.disabled = true;
+    const texto = b.textContent;
+    b.textContent = 'Gerando PDF…';
+    try {
+      await baixarPDF(alvo, nomeArquivo('OS-' + String(os.numero).padStart(4, '0'), tipo === 'os' ? '' : tipo, os.cliente?.nome), termica ? [60, 40] : 'a4');
+      toast('PDF baixado.');
+    } catch (err) { toast(err.message || 'Não foi possível gerar o PDF.', true); }
+    b.disabled = false;
+    b.textContent = texto;
+  };
   el.onchange = e => {
     if (e.target.id === 'doc-tipo') location.hash = e.target.value === 'etiquetas' ? `ordens/${os.id}/etiquetas` : `ordens/${os.id}/imprimir/${e.target.value}`;
     if (e.target.id === 'et-fmt') $('#etqs', el).className = `etiquetas ${e.target.value}`;

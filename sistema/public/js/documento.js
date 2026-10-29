@@ -4,7 +4,12 @@ import { esc } from './ui.js';
 export const urlLogo = a => (a.logo_versao ? `/api/config/logo?v=${encodeURIComponent(a.logo_versao)}` : null);
 
 /** Atributo de estilo com a cor escolhida para os documentos. */
-export const estiloDoc = a => `style="--doc-cor:${/^#[0-9a-f]{6}$/i.test(a.doc_cor || '') ? a.doc_cor : '#C92D6A'}"`;
+/** Mistura duas cores #rrggbb (p = peso da primeira). Calculado aqui porque o gerador de PDF não entende color-mix(). */
+const misturar = (c1, c2, p) => '#' + [1, 3, 5].map(i => Math.round(parseInt(c1.slice(i, i + 2), 16) * p + parseInt(c2.slice(i, i + 2), 16) * (1 - p)).toString(16).padStart(2, '0')).join('');
+export const estiloDoc = a => {
+  const cor = /^#[0-9a-f]{6}$/i.test(a.doc_cor || '') ? a.doc_cor : '#C92D6A';
+  return `style="--doc-cor:${cor};--doc-borda:${misturar(cor, '#bbbbbb', 0.4)}"`;
+};
 
 /**
  * Cabeçalho do documento: logo + dados do ateliê à esquerda; tipo do documento, número e datas à direita.

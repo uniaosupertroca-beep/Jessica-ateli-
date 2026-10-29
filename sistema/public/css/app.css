@@ -1,6 +1,7 @@
 /* Layout: barra lateral fixa no computador, menu inferior no celular; cartões brancos sobre fundo off-white.
    Cores do tema "Rose Quartz" (21st.dev): rosa #C92D6A, rosé claro #FBDAE7, bordas #E7E7EE, cantos arredondados e sombra suave. */
 :root{
+  color-scheme:light;
   --bg:#F8F6F8; --surface:#FFFFFF; --sunk:#F3F1F4; --ink:#1C1A21; --muted:#5E5A66; --line:#E7E7EE;
   --accent:#C92D6A; --accent-ink:#FFFFFF; --accent-soft:#FBDAE7;
   --sombra:0 1px 2px rgba(28,26,33,.04),0 4px 14px rgba(28,26,33,.05);
@@ -341,7 +342,7 @@ label.chk input{width:18px;height:18px}
 .a4 .doc-extra{color:#555;font-size:11px}
 .a4 h2{color:var(--doc-cor)}
 .a4 table th{color:var(--doc-cor);border-bottom:1.5px solid var(--doc-cor)}
-.a4 .box{border-color:color-mix(in srgb,var(--doc-cor) 40%,#bbb)}
+.a4 .box{border-color:var(--doc-borda,#bbb)}
 .a4 .ass div{border-top-color:var(--doc-cor)}
 .etiqueta .et-logo{max-height:8mm;max-width:22mm;object-fit:contain;display:block;margin-bottom:1mm}
 .a4.previa-doc{width:auto;min-height:0;margin:0;border:1px solid var(--line);border-radius:12px;background:#fff;color:#1a1a1a;padding:18px;font-size:12px;box-shadow:none}
@@ -356,3 +357,7 @@ label.chk input{width:18px;height:18px}
 .tag-un{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:6px;background:var(--accent-soft);color:var(--ink);vertical-align:middle}
 @media (max-width:640px){.barra-topo{flex-wrap:wrap}.sel-unidade{flex:1 1 100%}.sel-unidade select{max-width:none;width:100%}}
 table td.num,table td.r.num{white-space:nowrap}
+/* Durante a geração do PDF: cabe na largura útil da folha A4 (margem de 8 mm) */
+.gerando-pdf{width:733px!important;max-width:733px!important;min-height:0!important;margin:0!important;box-shadow:none!important;background:#fff!important}
+.a4.gerando-pdf{padding:20px 22px!important}
+.etiquetas.termica.gerando-pdf{width:227px!important;max-width:227px!important}
