@@ -76,6 +76,11 @@ rotasProducao.get('/pecas/:codigo', async c => {
 
 rotasProducao.get('/producao/:itemId/eventos', async c => {
   exigir(c, 'producao.ver');
+  const u = c.get('usuario');
+  if (u.papel === 'costureira') {
+    const ok = await c.env.DB.prepare('SELECT 1 FROM order_items WHERE id = ? AND (responsavel_id = ? OR responsavel_id IS NULL)').bind(c.req.param('itemId'), u.id).first();
+    if (!ok) throw naoEncontrado('Peça');
+  }
   const { results } = await c.env.DB.prepare(
     `SELECT e.tipo, e.minutos, e.texto, e.em, u.nome AS usuario FROM production_events e LEFT JOIN users u ON u.id = e.user_id
      WHERE e.item_id = ? ORDER BY e.em DESC LIMIT 100`,

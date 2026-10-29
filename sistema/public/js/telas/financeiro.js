@@ -3,22 +3,26 @@ import { $, brl, dataBR, dataHora, esc, modal, nOS, opcoes, pill, toast } from '
 import { lerValor, somarDias, valorParaCampo } from '../regras.js';
 import { modalAbrirCaixa, modalEstorno } from './ordens.js';
 
-const ABAS = [['caixa', 'Caixa do dia'], ['lancamentos', 'Lançamentos'], ['receber', 'A receber']];
+const ABAS = [['caixa', 'Caixa do dia'], ['lancamentos', 'Lançamentos'], ['receber', 'A receber'], ['pagar', 'A pagar']];
 const est = { aba: 'caixa', de: null, ate: null, tipo: '' };
 
 export async function telaFinanceiro(el, _p, vivo) {
   est.de ??= somarDias(sessao.hoje, -6);
+  const abaVinda = sessionStorage.getItem('aba-fin');
+  if (abaVinda) { est.aba = abaVinda; sessionStorage.removeItem('aba-fin'); }
   est.ate ??= sessao.hoje;
   const desenhar = async () => {
     el.innerHTML = `<div class="head"><div><h1>Financeiro</h1><p>Caixa, recebimentos e valores a receber. Lançamentos não são apagados: correções são feitas por estorno.</p></div>
         ${sessao.pode('financeiro.lancar') ? `<div class="row"><button class="btn" data-a="lancar" data-tipo="saida">− Saída</button><button class="btn" data-a="sangria">Sangria</button>
           <button class="btn pri" data-a="lancar" data-tipo="entrada">+ Entrada</button></div>` : ''}</div>
-      <div class="tabs">${ABAS.map(([k, l]) => `<button class="${est.aba === k ? 'on' : ''}" data-aba="${k}">${l}</button>`).join('')}</div><div id="fin"><p class="carregando">Carregando…</p></div>
-      <p class="ajuda" style="margin:0">Contas a pagar, resumo por período e relatórios entram na fase 3.</p>`;
+      <div class="tabs">${ABAS.filter(([k]) => k !== 'pagar' || sessao.pode('pagar.ver')).map(([k, l]) => `<button class="${est.aba === k ? 'on' : ''}" data-aba="${k}">${l}</button>`).join('')}</div>
+      <div id="fin"><p class="carregando">Carregando…</p></div>
+      ${sessao.pode('relatorios.ver') ? '<p class="ajuda" style="margin:0">Resumo por período, gráficos e exportação: veja <a href="#relatorios">Relatórios</a>.</p>' : ''}`;
     const alvo = $('#fin', el);
     if (est.aba === 'caixa') await abaCaixa(alvo);
     if (est.aba === 'lancamentos') await abaLancamentos(alvo);
     if (est.aba === 'receber') await abaReceber(alvo);
+    if (est.aba === 'pagar') await abaPagar(alvo, desenhar);
   };
   el.onclick = async e => {
     const aba = e.target.closest('[data-aba]');
@@ -167,6 +171,84 @@ function reabrirCaixa(depois) {
       try { await api('/caixa/reabrir', { corpo: { motivo: $('#m-mot', m).value.trim() } }); } catch (e) { toast(e.message, true); return false; }
       toast('Caixa reaberto. Lembre de fechar de novo.');
       depois();
+    } }],
+  });
+}
+
+/* ---------------------------------------------------------------- contas a pagar */
+let filtroPagar = 'abertas';
+async function abaPagar(alvo, depois) {
+  const r = await api('/pagar?status=' + filtroPagar);
+  const pode = sessao.pode('pagar.editar');
+  alvo.innerHTML = `<div class="grid g3" style="margin-top:12px">
+      <div class="panel stat"><span class="lbl">Em aberto</span><span class="val num">${brl(r.total_aberto)}</span></div>
+      <div class="panel stat"><span class="lbl">Vencido</span><span class="val num" style="color:${r.total_vencido ? 'var(--crit)' : 'inherit'}">${brl(r.total_vencido)}</span></div>
+      <div class="panel stat" style="justify-content:center">${pode ? '<button class="btn pri" data-nova-conta>+ Nova conta a pagar</button>' : ''}</div></div>
+    <div class="panel"><div class="row"><select class="in" id="p-st" style="width:auto">${[['abertas', 'Em aberto'], ['pagas', 'Pagas'], ['canceladas', 'Canceladas'], ['todas', 'Todas']]
+      .map(([k, l]) => `<option value="${k}" ${filtroPagar === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    ${r.contas.length ? `<div class="tw"><table><thead><tr><th>Vencimento</th><th>Descrição</th><th>Categoria</th><th>Fornecedor</th><th>Situação</th><th class="r">Valor</th><th></th></tr></thead><tbody>
+      ${r.contas.map(k => `<tr><td>${dataBR(k.vencimento)}</td><td>${esc(k.descricao)}${k.observacoes ? `<div class="ajuda">${esc(k.observacoes)}</div>` : ''}</td><td class="muted">${esc(k.categoria)}</td>
+        <td class="muted">${esc(k.fornecedor || '')}</td>
+        <td>${k.status === 'paga' ? `<span class="pill p-ok">Paga em ${dataBR(k.paga_em)}</span>` : k.status === 'cancelada' ? `<span class="pill p-muted" title="${esc(k.motivo_cancelamento || '')}">Cancelada</span>`
+          : k.vencida ? '<span class="pill p-crit">Vencida</span>' : k.vencimento <= somarDias(sessao.hoje, 7) ? '<span class="pill p-warn">Vence em breve</span>' : '<span class="pill p-neutral">Em aberto</span>'}</td>
+        <td class="r num">${brl(k.valor_centavos)}</td>
+        <td class="r">${pode && k.status === 'aberta' ? `<button class="btn pri sm" data-pagar="${k.id}">Pagar</button> <button class="btn sm ghost" data-cancelar="${k.id}">Cancelar</button>`
+          : k.movimento_id && sessao.pode('financeiro.estornar') ? `<button class="btn sm" data-a="estornar" data-id="${k.movimento_id}">Estornar pagamento</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty">Nenhuma conta.</div>'}</div>`;
+  $('#p-st', alvo).onchange = e => { filtroPagar = e.target.value; depois(); };
+  alvo.onclick = e => {
+    const conta = id => r.contas.find(k => k.id === id);
+    if (e.target.closest('[data-nova-conta]')) novaConta(depois);
+    const pg = e.target.closest('[data-pagar]');
+    if (pg) pagarConta(conta(pg.dataset.pagar), depois);
+    const cc = e.target.closest('[data-cancelar]');
+    if (cc) modal({
+      title: 'Cancelar conta', body: '<div class="field"><label class="req" for="c-mot">Motivo</label><input class="in" id="c-mot"></div>',
+      actions: [{ label: 'Voltar' }, { label: 'Cancelar conta', cls: 'danger-solid', fn: async m => {
+        try { await api(`/pagar/${cc.dataset.cancelar}/cancelar`, { corpo: { motivo: $('#c-mot', m).value.trim() } }); } catch (er) { toast(er.message, true); return false; }
+        toast('Conta cancelada.'); depois();
+      } }],
+    });
+  };
+}
+
+async function novaConta(depois) {
+  const { fornecedores } = await api('/estoque/fornecedores').catch(() => ({ fornecedores: [] }));
+  const cats = sessao.config.categorias_financeiras.filter(c => c.ativo && !c.sistema && c.tipo === 'saida');
+  modal({
+    title: 'Nova conta a pagar',
+    body: `<div class="grid g2" style="gap:12px">
+      <div class="field" style="grid-column:1/-1"><label class="req" for="n-desc">Descrição</label><input class="in" id="n-desc" placeholder="ex.: Aluguel de dezembro"></div>
+      <div class="field"><label class="req" for="n-val">Valor total (R$)</label><input class="in num" id="n-val" inputmode="decimal"></div>
+      <div class="field"><label for="n-venc">Vencimento (1ª parcela)</label><input class="in" type="date" id="n-venc" value="${somarDias(sessao.hoje, 10)}"></div>
+      <div class="field"><label for="n-cat">Categoria</label><select class="in" id="n-cat">${opcoes(cats)}</select></div>
+      <div class="field"><label for="n-parc">Parcelas</label><input class="in num" id="n-parc" type="number" min="1" max="36" value="1"></div>
+      <div class="field" style="grid-column:1/-1"><label for="n-forn">Fornecedor</label><select class="in" id="n-forn">${opcoes(fornecedores.filter(f => f.ativo), null, '— nenhum —')}</select></div>
+      <div class="field" style="grid-column:1/-1"><label for="n-obs">Observações</label><input class="in" id="n-obs"></div></div>`,
+    actions: [{ label: 'Voltar' }, { label: 'Cadastrar', cls: 'pri', fn: async m => {
+      const v = lerValor($('#n-val', m).value);
+      if (!v) { toast('Informe o valor.', true); return false; }
+      try {
+        await api('/pagar', { corpo: { descricao: $('#n-desc', m).value.trim(), valor_centavos: v, vencimento: $('#n-venc', m).value, categoria_id: $('#n-cat', m).value,
+          parcelas: Number($('#n-parc', m).value) || 1, supplier_id: $('#n-forn', m).value || null, observacoes: $('#n-obs', m).value.trim() } });
+      } catch (e) { toast(e.message, true); return false; }
+      toast('Conta cadastrada.'); depois();
+    } }],
+  });
+}
+
+function pagarConta(k, depois) {
+  const chave = novaChave();
+  modal({
+    title: 'Pagar: ' + k.descricao,
+    body: `<p style="margin:0 0 10px">Valor <b class="num">${brl(k.valor_centavos)}</b>. O pagamento vira uma saída no caixa de hoje.</p>
+      <div class="field"><label for="p-forma">Forma de pagamento</label><select class="in" id="p-forma">${opcoes(sessao.config.formas_pagamento.filter(f => f.ativo && !f.eh_credito_cliente))}</select></div>`,
+    actions: [{ label: 'Voltar' }, { label: 'Confirmar pagamento', cls: 'pri', fn: async m => {
+      try { await api(`/pagar/${k.id}/pagar`, { chave, corpo: { forma_id: $('#p-forma', m).value } }); } catch (e) {
+        if (e.codigo === 'caixa_fechado') return modalAbrirCaixa(() => pagarConta(k, depois)) && 'manter';
+        toast(e.message, true); return false;
+      }
+      toast('Conta paga.'); depois();
     } }],
   });
 }

@@ -1,13 +1,15 @@
 import { api, carregarConfig, sessao } from '../api.js';
 import { $, brl, dataBR, dataHora, esc, modal, opcoes, toast } from '../ui.js';
-import { lerValor, UNIDADES, valorParaCampo } from '../regras.js';
+import { duracao, lerValor, valorParaCampo } from '../regras.js';
+
+const diasTexto = d => ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'].filter((_, i) => d.includes(String(i))).join(', ');
 
 const ABAS = [
   ['conta', 'Minha conta', () => true],
   ['atelie', 'Ateliê', () => sessao.pode('config.editar')],
-  ['servicos', 'Serviços e preços', () => sessao.pode('config.editar')],
   ['cadastros', 'Pagamentos e medidas', () => sessao.pode('config.editar')],
   ['usuarios', 'Equipe', () => sessao.pode('usuarios.gerenciar')],
+  ['auditoria', 'Auditoria', () => sessao.pode('auditoria.ver')],
   ['backup', 'Backup', () => sessao.pode('backup.gerenciar')],
 ];
 let aba = 'conta';
@@ -22,7 +24,7 @@ export async function telaConfig(el) {
     el.innerHTML = `<div class="head"><div><h1>${abas.length > 1 ? 'Configurações' : 'Minha conta'}</h1><p>As mudanças valem na hora para todo o sistema.</p></div></div>
       ${abas.length > 1 ? `<div class="tabs">${abas.map(([k, l]) => `<button class="${aba === k ? 'on' : ''}" data-aba="${k}">${l}</button>`).join('')}</div>` : ''}<div id="cfg"></div>`;
     const alvo = $('#cfg', el);
-    await { conta: abaConta, atelie: abaAtelie, servicos: abaServicos, cadastros: abaCadastros, usuarios: abaUsuarios, backup: abaBackup }[aba](alvo, desenhar);
+    await { conta: abaConta, atelie: abaAtelie, cadastros: abaCadastros, usuarios: abaUsuarios, auditoria: abaAuditoria, backup: abaBackup }[aba](alvo, desenhar);
   };
   el.onclick = e => {
     const b = e.target.closest('[data-aba]');
@@ -48,73 +50,31 @@ function abaConta(alvo) {
 
 function abaAtelie(alvo, depois) {
   const a = sessao.config.atelie;
-  const campo = (k, l, tipo = 'text') => `<div class="field"><label for="a-${k}">${l}</label><input class="in" id="a-${k}" type="${tipo}" ${tipo === 'number' ? 'min="1"' : ''} value="${esc(a[k])}"></div>`;
+  const campo = (k, l, tipo = 'text') => `<div class="field"><label for="a-${k}">${l}</label><input class="in" id="a-${k}" type="${tipo}" ${tipo === 'number' ? 'min="0" step="any"' : ''} value="${esc(a[k])}"></div>`;
   alvo.innerHTML = `<div class="grid g2" style="margin-top:12px"><div class="panel"><h2>Dados impressos na OS</h2>
       ${campo('nome', 'Nome do ateliê')}${campo('telefone', 'Telefone')}${campo('endereco', 'Endereço')}${campo('documento', 'CPF ou CNPJ (opcional)')}
       <div class="field"><label for="a-rodape_os">Texto no rodapé da OS</label><textarea class="in" id="a-rodape_os">${esc(a.rodape_os)}</textarea></div></div>
-    <div class="panel"><h2>Capacidade da agenda</h2>${campo('capacidade_diaria', 'Entregas por dia (lotado a partir de)', 'number')}${campo('limite_quase_cheio', 'Mostrar "quase cheio" a partir de', 'number')}
-      <p class="ajuda" style="margin:0">Dia lotado não bloqueia: o sistema avisa e pede confirmação para encaixar.</p>
+    <div class="panel"><h2>Agenda</h2>${campo('capacidade_diaria', 'Entregas por dia (lotado a partir de)', 'number')}${campo('limite_quase_cheio', 'Mostrar "quase cheio" a partir de', 'number')}
+      ${campo('capacidade_provas_dia', 'Provas por dia (no máximo)', 'number')}
+      <div class="grid g2" style="gap:10px">${campo('horario_inicio', 'Abre às', 'time')}${campo('horario_fim', 'Fecha às', 'time')}</div>
+      <p class="ajuda" style="margin:0">Dia lotado não bloqueia: o sistema avisa e pede confirmação para encaixar. A capacidade em horas vem da Equipe.</p></div>
+    <div class="panel"><h2>Precificação (calculadora)</h2>
+      <div class="field"><label for="a-hora">Custo da hora de trabalho (R$)</label><input class="in num" id="a-hora" inputmode="decimal" value="${valorParaCampo(a.custo_hora_centavos)}"></div>
+      ${campo('despesas_indiretas_pct', 'Despesas indiretas (%) — aluguel, luz, máquinas', 'number')}${campo('margem_pct', 'Margem desejada (%)', 'number')}
+      <p class="ajuda" style="margin:0">Usados na calculadora de preço sugerido (Serviços) e na mão de obra estimada dos relatórios.</p>
       <button class="btn pri" id="a-ok">Salvar</button></div></div>`;
   $('#a-ok', alvo).onclick = async () => {
     const v = k => $(`#a-${k}`, alvo).value.trim();
     try {
       await api('/config/atelie', { metodo: 'PATCH', corpo: { nome: v('nome'), telefone: v('telefone'), endereco: v('endereco'), documento: v('documento'), rodape_os: v('rodape_os'),
-        capacidade_diaria: Number(v('capacidade_diaria')), limite_quase_cheio: Number(v('limite_quase_cheio')) } });
+        capacidade_diaria: Number(v('capacidade_diaria')), limite_quase_cheio: Number(v('limite_quase_cheio')),
+        capacidade_provas_dia: Number(v('capacidade_provas_dia')), horario_inicio: v('horario_inicio'), horario_fim: v('horario_fim'),
+        custo_hora_centavos: lerValor($('#a-hora', alvo).value || '0') ?? 0,
+        despesas_indiretas_pct: Number(v('despesas_indiretas_pct').replace(',', '.')) || 0, margem_pct: Number(v('margem_pct').replace(',', '.')) || 0 } });
       toast('Dados do ateliê salvos.');
       depois();
     } catch (e) { toast(e.message, true); }
   };
-}
-
-function abaServicos(alvo, depois) {
-  const { categorias_servico: cats, servicos } = sessao.config;
-  alvo.innerHTML = `<div class="panel" style="margin-top:12px"><div class="panel-h"><h2>Catálogo de serviços</h2><button class="btn pri sm" data-novo>+ Novo serviço</button></div>
-    <p class="ajuda" style="margin:0">Os preços são definidos por você. Serviços com preço R$ 0,00 aparecem na OS, mas só o administrador consegue lançar valor diferente do catálogo.</p>
-    ${cats.map(c => {
-      const lista = servicos.filter(s => s.categoria_id === c.id);
-      return `<h3 style="margin-top:10px">${esc(c.nome)}${c.ativo ? '' : ' <span class="pill p-muted">inativa</span>'}</h3>
-      ${lista.length ? `<div class="tw"><table><thead><tr><th>Serviço</th><th>Unid.</th><th class="r">Preço</th><th class="r">Tempo</th><th class="r">Mão de obra</th><th></th></tr></thead><tbody>
-        ${lista.map(s => `<tr style="${s.ativo ? '' : 'opacity:.5'}"><td>${esc(s.nome)}${s.descricao ? `<div class="ajuda">${esc(s.descricao)}</div>` : ''}</td><td>${s.unidade}</td>
-          <td class="r num" style="${s.preco_centavos ? '' : 'color:var(--warn)'}">${s.preco_centavos ? brl(s.preco_centavos) : 'definir'}</td><td class="r num">${s.tempo_min ? s.tempo_min + ' min' : '—'}</td>
-          <td class="r num">${s.custo_mao_obra_centavos ? brl(s.custo_mao_obra_centavos) : '—'}</td><td class="r"><button class="btn sm" data-editar="${s.id}">Editar</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Nenhum serviço.</div>'}`;
-    }).join('')}
-    <div class="row"><input class="in" id="nova-cat" placeholder="Nova categoria de serviço" style="flex:1;min-width:200px"><button class="btn" data-nova-cat>Adicionar categoria</button></div></div>`;
-  alvo.onclick = async e => {
-    if (e.target.closest('[data-novo]')) formServico(null, depois);
-    const ed = e.target.closest('[data-editar]');
-    if (ed) formServico(servicos.find(s => s.id === ed.dataset.editar), depois);
-    if (e.target.closest('[data-nova-cat]')) {
-      try { await api('/config/categorias-servico', { corpo: { nome: $('#nova-cat', alvo).value.trim() } }); toast('Categoria criada.'); depois(); } catch (err) { toast(err.message, true); }
-    }
-  };
-}
-
-function formServico(s, depois) {
-  const x = s || { categoria_id: sessao.config.categorias_servico[0]?.id, nome: '', descricao: '', unidade: 'un', preco_centavos: 0, tempo_min: 0, custo_mao_obra_centavos: 0, ativo: 1 };
-  modal({
-    title: s ? 'Editar serviço' : 'Novo serviço',
-    body: `<div class="grid g2" style="gap:12px">
-      <div class="field" style="grid-column:1/-1"><label class="req" for="sv-nome">Nome</label><input class="in" id="sv-nome" value="${esc(x.nome)}"></div>
-      <div class="field"><label for="sv-cat">Categoria</label><select class="in" id="sv-cat">${opcoes(sessao.config.categorias_servico, x.categoria_id)}</select></div>
-      <div class="field"><label for="sv-un">Cobrança por</label><select class="in" id="sv-un">${Object.entries(UNIDADES).map(([k, l]) => `<option value="${k}" ${x.unidade === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-      <div class="field"><label for="sv-preco">Preço (R$)</label><input class="in num" id="sv-preco" inputmode="decimal" value="${valorParaCampo(x.preco_centavos)}"></div>
-      <div class="field"><label for="sv-tempo">Tempo estimado (minutos)</label><input class="in num" id="sv-tempo" type="number" min="0" value="${x.tempo_min}"></div>
-      <div class="field"><label for="sv-mo">Custo de mão de obra estimado (R$)</label><input class="in num" id="sv-mo" inputmode="decimal" value="${valorParaCampo(x.custo_mao_obra_centavos)}"></div>
-      <div class="field" style="grid-column:1/-1"><label for="sv-desc">Descrição</label><input class="in" id="sv-desc" value="${esc(x.descricao)}"></div>
-      <label class="chk"><input type="checkbox" id="sv-ativo" ${x.ativo ? 'checked' : ''}> Ativo (aparece na OS)</label></div>`,
-    actions: [{ label: 'Voltar' }, { label: 'Salvar', cls: 'pri', fn: async m => {
-      const preco = lerValor($('#sv-preco', m).value);
-      const mo = lerValor($('#sv-mo', m).value || '0');
-      if (preco === null || mo === null) { toast('Valor inválido.', true); return false; }
-      const corpo = { categoria_id: $('#sv-cat', m).value, nome: $('#sv-nome', m).value.trim(), descricao: $('#sv-desc', m).value.trim(), unidade: $('#sv-un', m).value,
-        preco_centavos: preco, tempo_min: Number($('#sv-tempo', m).value) || 0, custo_mao_obra_centavos: mo, ativo: $('#sv-ativo', m).checked };
-      try {
-        await api(s ? `/config/servicos/${s.id}` : '/config/servicos', { metodo: s ? 'PUT' : 'POST', corpo });
-      } catch (e) { toast(e.message, true); return false; }
-      toast('Serviço salvo.');
-      depois();
-    } }],
-  });
 }
 
 function abaCadastros(alvo, depois) {
@@ -156,8 +116,8 @@ async function abaUsuarios(alvo, depois) {
   alvo.innerHTML = `<div class="panel" style="margin-top:12px"><div class="panel-h"><h2>Equipe</h2><button class="btn pri sm" data-novo>+ Nova pessoa</button></div>
     <p class="ajuda" style="margin:0"><b>Administrador:</b> tudo. <b>Atendente:</b> clientes, OS, recebimentos e caixa (sem alterar preço, estornar ou configurar).
       <b>Costureira:</b> vê as peças atribuídas a ela e atualiza a produção, sem valores.</p>
-    <div class="tw"><table><thead><tr><th>Nome</th><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Desde</th><th></th></tr></thead><tbody>
-      ${usuarios.map(u => `<tr style="${u.ativo ? '' : 'opacity:.5'}"><td>${esc(u.nome)}${u.trocar_senha ? ' <span class="pill p-warn">senha inicial</span>' : ''}</td><td>${esc(u.login || '—')}</td><td>${esc(u.email)}</td><td>${PAP[u.papel]}</td><td>${dataBR(u.criado_em)}</td>
+    <div class="tw"><table><thead><tr><th>Nome</th><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Produção/dia</th><th>Desde</th><th></th></tr></thead><tbody>
+      ${usuarios.map(u => `<tr style="${u.ativo ? '' : 'opacity:.5'}"><td>${esc(u.nome)}${u.trocar_senha ? ' <span class="pill p-warn">senha inicial</span>' : ''}</td><td>${esc(u.login || '—')}</td><td>${esc(u.email)}</td><td>${PAP[u.papel]}</td><td>${u.capacidade_min_dia ? duracao(u.capacidade_min_dia) + ' · ' + diasTexto(u.dias_trabalho) : '—'}</td><td>${dataBR(u.criado_em)}</td>
         <td class="r"><button class="btn sm" data-ed="${u.id}">Editar</button></td></tr>`).join('')}</tbody></table></div></div>`;
   const form = u => modal({
     title: u ? 'Editar pessoa' : 'Nova pessoa da equipe',
@@ -167,13 +127,18 @@ async function abaUsuarios(alvo, depois) {
       <div class="field"><label for="u-login">Usuário para entrar (opcional)</label><input class="in" id="u-login" autocapitalize="none" value="${esc(u?.login || '')}" placeholder="ex.: maria"></div>
       <div class="field"><label for="u-papel">Perfil</label><select class="in" id="u-papel">${Object.entries(PAP).map(([k, l]) => `<option value="${k}" ${u?.papel === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="field"><label ${u ? '' : 'class="req"'} for="u-senha">${u ? 'Nova senha temporária (deixe vazio para manter)' : 'Senha inicial (mínimo 6 caracteres; a pessoa troca no primeiro acesso)'}</label><input class="in" id="u-senha" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="u-cap">Horas de produção por dia (0 = não produz)</label><input class="in num" id="u-cap" inputmode="decimal" value="${u ? String(u.capacidade_min_dia / 60).replace('.', ',') : '0'}"></div>
+      <fieldset class="field" style="border:none;padding:0;margin:0"><legend class="ajuda" style="margin-bottom:6px">Dias de trabalho</legend><div class="row">
+        ${['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'].map((d, i) => `<label class="chk"><input type="checkbox" data-dia="${i}" ${(u?.dias_trabalho ?? '12345').includes(String(i)) ? 'checked' : ''}> ${d}</label>`).join('')}</div></fieldset>
       ${u ? `<label class="chk"><input type="checkbox" id="u-ativo" ${u.ativo ? 'checked' : ''}> Acesso ativo</label>` : ''}</div>`,
     actions: [{ label: 'Voltar' }, { label: 'Salvar', cls: 'pri', fn: async m => {
       const senha = $('#u-senha', m).value;
       try {
         const login = $('#u-login', m).value.trim();
-        if (u) await api(`/usuarios/${u.id}`, { metodo: 'PATCH', corpo: { nome: $('#u-nome', m).value.trim(), papel: $('#u-papel', m).value, ativo: $('#u-ativo', m).checked, login, ...(senha && { senha }) } });
-        else await api('/usuarios', { corpo: { nome: $('#u-nome', m).value.trim(), email: $('#u-email', m).value.trim(), login, papel: $('#u-papel', m).value, senha } });
+        const capacidade_min_dia = Math.round((Number($('#u-cap', m).value.replace(',', '.')) || 0) * 60);
+        const dias_trabalho = [...m.querySelectorAll('[data-dia]')].filter(x => x.checked).map(x => x.dataset.dia).join('');
+        if (u) await api(`/usuarios/${u.id}`, { metodo: 'PATCH', corpo: { nome: $('#u-nome', m).value.trim(), papel: $('#u-papel', m).value, ativo: $('#u-ativo', m).checked, login, capacidade_min_dia, dias_trabalho, ...(senha && { senha }) } });
+        else await api('/usuarios', { corpo: { nome: $('#u-nome', m).value.trim(), email: $('#u-email', m).value.trim(), login, papel: $('#u-papel', m).value, senha, capacidade_min_dia, dias_trabalho } });
       } catch (e) { toast(e.message, true); return false; }
       toast('Equipe atualizada.');
       depois();
@@ -200,4 +165,30 @@ async function abaBackup(alvo, depois) {
     b.disabled = true;
     try { await api('/admin/backup', { corpo: {} }); toast('Backup gerado.'); depois(); } catch (err) { toast(err.message, true); b.disabled = false; }
   };
+}
+
+async function abaAuditoria(alvo) {
+  const filtro = { entidade: '', de: '', ate: '' };
+  const ROT = { orders: 'Ordens', clients: 'Clientes', cash_movements: 'Financeiro', payables: 'Contas a pagar', materials: 'Estoque', users: 'Equipe',
+    appointments: 'Agenda', order_items: 'Produção', cash_sessions: 'Caixa', system_settings: 'Configurações', service_catalog: 'Serviços', order_photos: 'Fotos',
+    client_measurements: 'Medidas', stock_movements: 'Estoque', suppliers: 'Fornecedores' };
+  const carregar = async () => {
+    const qs = new URLSearchParams(Object.fromEntries(Object.entries(filtro).filter(([, v]) => v)));
+    const { registros } = await api('/auditoria?' + qs);
+    $('#au-lista', alvo).innerHTML = registros.length ? `<table><thead><tr><th>Quando</th><th>Quem</th><th>Ação</th><th>Área</th><th>Detalhes</th></tr></thead><tbody>
+      ${registros.map(r => `<tr><td class="num" style="white-space:nowrap">${dataHora(r.em)}</td><td>${esc(r.usuario || '—')}</td><td>${esc(r.acao)}</td>
+        <td>${esc(ROT[r.entidade] || r.entidade)}</td><td class="muted" style="font-size:.8rem;max-width:380px;word-break:break-word">${esc((r.dados || '').slice(0, 220))}</td></tr>`).join('')}</tbody></table>`
+      : '<div class="empty">Nenhum registro.</div>';
+  };
+  alvo.innerHTML = `<div class="panel" style="margin-top:12px"><div class="row">
+      <select class="in" id="au-ent" style="width:auto"><option value="">Todas as áreas</option>${Object.entries(ROT).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
+      <label class="row" style="gap:6px">De <input class="in" type="date" id="au-de" style="width:auto"></label><label class="row" style="gap:6px">até <input class="in" type="date" id="au-ate" style="width:auto"></label></div>
+    <p class="ajuda" style="margin:0">Registro de tudo o que foi feito no sistema. Não pode ser apagado nem alterado.</p><div class="tw" id="au-lista"></div></div>`;
+  alvo.onchange = e => {
+    if (e.target.id === 'au-ent') filtro.entidade = e.target.value;
+    if (e.target.id === 'au-de') filtro.de = e.target.value;
+    if (e.target.id === 'au-ate') filtro.ate = e.target.value;
+    carregar();
+  };
+  await carregar();
 }

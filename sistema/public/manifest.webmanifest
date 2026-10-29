@@ -1,0 +1,23 @@
+{
+  "name": "Ateliê Jessica — Gestão",
+  "short_name": "Ateliê Jessica",
+  "description": "Ordens de serviço, produção, agenda, clientes, estoque e financeiro do ateliê.",
+  "lang": "pt-BR",
+  "start_url": "/#inicio",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F8F6F8",
+  "theme_color": "#C92D6A",
+  "icons": [
+    { "src": "/icones/icone-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icones/icone-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icones/icone-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icones/icone.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "shortcuts": [
+    { "name": "Nova OS", "url": "/#ordens/nova" },
+    { "name": "Produção", "url": "/#producao" },
+    { "name": "Agenda", "url": "/#agenda" }
+  ]
+}

@@ -77,6 +77,16 @@ describe('telefone e WhatsApp (erro 4)', () => {
   });
 });
 
+describe('CSV', () => {
+  it('neutraliza fórmulas e mantém números negativos', async () => {
+    const { paraCSV } = await import('../public/js/regras.js');
+    const csv = paraCSV([{ titulo: 'Nome', valor: (x: any) => x.n }, { titulo: 'Valor', valor: (x: any) => x.v }], [{ n: '=HYPERLINK("x")', v: '-200,00' }, { n: 'Ana; Lima', v: '10,00' }]);
+    expect(csv).toContain(`"'=HYPERLINK(""x"")"`);
+    expect(csv).toContain(';-200,00');
+    expect(csv).toContain('"Ana; Lima"');
+  });
+});
+
 describe('totais e status', () => {
   it('soma várias peças e serviços com desconto', () => {
     const t = calcularTotais([

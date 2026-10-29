@@ -344,7 +344,9 @@ export function somarQtd(a, b) {
 /** Converte valores de um relatório em CSV (separador ;, compatível com Excel em português). */
 export function paraCSV(colunas, linhas) {
   const cel = v => {
-    const t = v === null || v === undefined ? '' : String(v);
+    let t = v === null || v === undefined ? '' : String(v);
+    // Evita que um texto como "=HYPERLINK(...)" vire fórmula ao abrir no Excel (números negativos ficam como estão).
+    if (/^[=+\-@\t\r]/.test(t) && !/^-?\d[\d.,]*$/.test(t)) t = "'" + t;
     return /[;"\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
   };
   return [colunas.map(c => cel(c.titulo)).join(';'), ...linhas.map(l => colunas.map(c => cel(c.valor(l))).join(';'))].join('\r\n');

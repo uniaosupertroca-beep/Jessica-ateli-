@@ -3,10 +3,11 @@ import {
   $, $$, brl, comBotao, confirmar, dataBR, dataHora, dataSemana, esc, fecharModal, formatarTelefone, modal, nOS, opcoes, pill, pillProd, toast,
 } from '../ui.js';
 import {
-  FLUXO_OS, STATUS_DE_PRODUCAO, lerQuantidade, lerValor, linkWhatsApp, montarMensagem, MODELOS_MENSAGEM, numeroWhatsApp, situacaoDia, somarDias,
+  duracao, FLUXO_OS, STATUS_DE_PRODUCAO, TIPOS_AGENDA, lerQuantidade, lerValor, linkWhatsApp, montarMensagem, MODELOS_MENSAGEM, numeroWhatsApp, situacaoDia, somarDias,
   STATUS_OS, STATUS_PRODUCAO, subtotal, transicoesManuais, UNIDADES, valorParaCampo,
 } from '../regras.js';
 import { modalNovaCliente } from './clientes.js';
+import { modalCompromisso } from './agenda.js';
 
 /* =========================================================================
  * LISTA DE OS
@@ -15,6 +16,8 @@ const FILTROS = [['ativas', 'Em andamento'], ['atrasadas', 'Atrasadas'], ['todas
 const filtro = { q: '', status: 'ativas', de: '', ate: '' };
 
 export async function telaOrdens(el, _p, vivo) {
+  const vindo = sessionStorage.getItem('filtro-os');
+  if (vindo) { filtro.status = vindo; sessionStorage.removeItem('filtro-os'); }
   const verValores = sessao.pode('os.financeiro.ver');
   el.innerHTML = `<div class="head"><div><h1>Ordens de serviço</h1><p id="os-qtd">Carregando…</p></div>
       ${sessao.pode('os.editar') ? '<a class="btn pri" href="#ordens/nova">+ Nova OS</a>' : ''}</div>
@@ -73,7 +76,8 @@ function modeloDe(os) {
     observacoes: os.observacoes || '',
     itens: os.itens.map(i => ({
       id: i.id, codigo: i.codigo, peca: i.peca, descricao: i.descricao, prazo: i.prazo || '', responsavel_id: i.responsavel_id || '',
-      status_producao: i.status_producao, responsavel_nome: i.responsavel_nome,
+      status_producao: i.status_producao, responsavel_nome: i.responsavel_nome, urgente: i.urgente, tempo_real_min: i.tempo_real_min, retrabalhos: i.retrabalhos,
+      obs_interna: i.obs_interna,
       servicos: i.servicos.map(s => ({ id: s.id, service_id: s.service_id || '', descricao: s.descricao, unidade: s.unidade,
         quantidade: String(s.quantidade).replace('.', ','), valor: s.valor_unitario_centavos ?? 0, tempo_min: s.tempo_min })),
     })),
@@ -101,6 +105,14 @@ export async function telaOS(el, params, vivo) {
   } };
   desenhar(ctx);
   ligarEventos(ctx);
+  // Veio da etiqueta (QR Code): destaca a peça lida.
+  const destacar = sessionStorage.getItem('destacar-peca');
+  if (destacar) {
+    sessionStorage.removeItem('destacar-peca');
+    const i = ctx.f.itens.findIndex(x => x.id === destacar);
+    const bloco = i >= 0 && $(`.peca[data-i="${i}"]`, el);
+    if (bloco) { bloco.classList.add('destaque'); bloco.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  }
 }
 
 const cfg = () => sessao.config;
@@ -130,7 +142,7 @@ function desenhar(ctx) {
     <div class="head"><div><a class="btn link" href="#ordens" style="padding-left:0">← Ordens de serviço</a>
         <h1>${salva ? 'OS ' + nOS(f.numero) : 'Nova ordem de serviço'}</h1>
         <p>${salva ? `Aberta em ${dataBR(f.aberta_em)} · ${pill(f.status)}` : 'O número é gerado ao salvar.'}</p></div>
-      <div class="row nao-imprimir">${salva ? `<a class="btn" href="#ordens/${f.id}/imprimir">Imprimir / PDF</a>` : ''}
+      <div class="row nao-imprimir">${salva ? `<a class="btn" href="#ordens/${f.id}/imprimir">Documentos / PDF</a><a class="btn" href="#ordens/${f.id}/etiquetas">Etiquetas</a>` : ''}
         ${ed ? `<button class="btn pri" data-a="salvar">${salva ? 'Salvar alterações' : 'Salvar OS'}</button>` : ''}</div></div>
     ${salva ? painelStatus(ctx) : ''}
     <div class="panel"><h2>Cliente e prazos</h2>
@@ -159,6 +171,7 @@ function desenhar(ctx) {
       </div>
     </div>
     ${salva && verValores ? painelPagamentos(ctx) : ''}
+    ${salva ? painelAgendaMateriais(ctx) : ''}
     ${salva && sessao.pode('fotos.ver') ? painelFotos(ctx) : ''}
     ${salva ? painelHistorico(ctx) : ''}
     ${ed ? `<div class="row nao-imprimir" style="justify-content:flex-end"><button class="btn pri" data-a="salvar">${salva ? 'Salvar alterações' : 'Salvar OS'}</button></div>` : ''}`;
@@ -187,7 +200,8 @@ function blocoPeca(ctx, it, i) {
   }).join('');
   const prodPode = salva && it.id && sessao.pode('producao.atualizar') && (sessao.eu.papel !== 'costureira' || it.responsavel_id === sessao.eu.id);
   return `<div class="peca" data-i="${i}">
-    <div class="peca-h"><div class="row"><b>Peça ${i + 1}</b>${it.codigo ? `<span class="codigo">código ${esc(it.codigo)}</span>` : ''}${it.status_producao ? pillProd(it.status_producao) : ''}</div>
+    <div class="peca-h"><div class="row"><b>Peça ${i + 1}</b>${it.codigo ? `<span class="codigo">código ${esc(it.codigo)}</span>` : ''}${it.status_producao ? pillProd(it.status_producao) : ''}
+      ${it.urgente ? '<span class="pill p-crit">urgente</span>' : ''}${it.tempo_real_min ? `<span class="ajuda">feito ${duracao(it.tempo_real_min)}</span>` : ''}${it.retrabalhos ? `<span class="ajuda">${it.retrabalhos} retrabalho(s)</span>` : ''}</div>
       ${ed && ctx.f.itens.length > 1 && (!it.status_producao || it.status_producao === 'aguardando') ? `<button class="btn sm danger" type="button" data-a="rm-peca" data-i="${i}">Remover peça</button>` : ''}</div>
     <div class="grid g3" style="gap:10px">
       <div class="field"><label class="req" for="p-${i}-peca">Peça</label><input class="in" id="p-${i}-peca" data-p="peca" value="${esc(it.peca)}" placeholder="Ex.: Calça jeans azul" ${ed ? '' : 'disabled'}></div>
@@ -239,8 +253,9 @@ function blocoWhatsApp(ctx) {
   return `<button class="btn sm wa" data-a="wa" data-modelo="${principal}">${principal === 'pronta' ? 'Avisar que está pronta' : 'WhatsApp: ' + MODELOS_MENSAGEM[principal].toLowerCase()}</button>
     <button class="btn sm ghost" data-a="wa-outras">Outras mensagens</button>`;
 }
-async function abrirWhatsApp(ctx, modelo) {
-  const texto = montarMensagem(modelo, dadosMensagem(ctx));
+async function abrirWhatsApp(ctx, modelo, prova) {
+  const prox = prova || ctx.os.compromissos?.find(c => c.tipo === 'prova' && c.status === 'agendado' && c.dia >= sessao.hoje);
+  const texto = montarMensagem(modelo, { ...dadosMensagem(ctx), dataProva: prox?.dia, horaProva: prox?.hora_inicio });
   const link = linkWhatsApp(numeroWhatsApp(ctx.os.cliente), texto);
   if (!link) return toast('Telefone da cliente inválido.', true);
   modal({
@@ -252,6 +267,69 @@ async function abrirWhatsApp(ctx, modelo) {
       window.open(linkWhatsApp(numeroWhatsApp(ctx.os.cliente), t), '_blank', 'noopener');
       await api(`/ordens/${ctx.f.id}/mensagens`, { corpo: { modelo, texto: t } }).catch(() => {});
       toast('WhatsApp aberto. Envie a mensagem no aplicativo.');
+    } }],
+  });
+}
+
+/* ---------------------------------------------------------------- agenda e materiais da OS */
+function painelAgendaMateriais(ctx) {
+  const { os, f } = ctx;
+  const aberta = !['entregue', 'cancelada'].includes(f.status);
+  const verCusto = sessao.pode('os.financeiro.ver');
+  const comps = os.compromissos || [];
+  const mats = os.materiais || [];
+  const custoMat = mats.reduce((s, m) => s + (-m.quantidade * (m.custo_unitario_centavos || 0)), 0);
+  return `<div class="grid g2">
+    <div class="panel"><div class="panel-h"><h2>Provas e compromissos</h2>${sessao.pode('agenda.editar') && aberta ? `<div class="row">
+        <button class="btn sm pri" data-a="agendar" data-tipo="prova">+ Agendar prova</button><button class="btn sm ghost" data-a="agendar" data-tipo="retirada">+ Outro</button></div>` : ''}</div>
+      ${comps.length ? `<div class="list">${comps.map(c => `<div class="li" ${sessao.pode('agenda.editar') ? `data-a="comp" data-id="${c.id}"` : ''}><div><div class="t">${dataBR(c.dia)}${c.hora_inicio ? ' · ' + esc(c.hora_inicio) : ''} — ${esc(TIPOS_AGENDA[c.tipo])}</div>
+          <div class="s">${esc(c.profissional || '')}${c.status !== 'agendado' ? ' · ' + esc(c.status) : ''}</div></div>
+          ${c.tipo === 'prova' && c.status === 'agendado' && sessao.pode('whatsapp.usar') && numeroWhatsApp(os.cliente) ? `<button class="btn sm wa" data-a="wa-prova" data-id="${c.id}">Lembrar</button>` : ''}</div>`).join('')}</div>`
+        : '<div class="empty">Nada agendado para esta OS.</div>'}</div>
+    <div class="panel"><div class="panel-h"><h2>Materiais usados</h2>${sessao.pode('estoque.consumir') && f.status !== 'cancelada' ? '<button class="btn sm pri" data-a="material">+ Lançar material</button>' : ''}</div>
+      ${mats.length ? `<div class="tw"><table><thead><tr><th>Material</th><th>Peça</th><th class="r">Qtd</th>${verCusto ? '<th class="r">Custo</th>' : ''}<th></th></tr></thead><tbody>
+        ${mats.map(m => `<tr><td>${esc(m.nome)}${m.tipo === 'reversao' ? ' <span class="pill p-warn">reversão</span>' : ''}</td><td class="num">${esc(f.itens.find(i => i.id === m.item_id)?.codigo || '—')}</td>
+          <td class="r num">${String(Math.round(-m.quantidade * 1000) / 1000).replace('.', ',')} ${esc(m.unidade)}</td>
+          ${verCusto ? `<td class="r num">${brl(-m.quantidade * (m.custo_unitario_centavos || 0))}</td>` : ''}
+          <td class="r">${m.revertido_por ? '<span class="pill p-muted">Revertido</span>' : m.tipo === 'consumo' && sessao.pode('estoque.movimentar') ? `<button class="btn sm ghost" data-a="rev-mat" data-id="${m.id}">Desfazer</button>` : ''}</td></tr>`).join('')}</tbody></table></div>
+        ${verCusto ? `<p class="ajuda" style="margin:0">Custo de materiais desta OS: <b>${brl(custoMat)}</b>${os.total ? ` · margem antes da mão de obra: <b>${brl(os.total - custoMat)}</b>` : ''}</p>` : ''}`
+        : '<div class="empty">Nenhum material lançado.</div>'}</div></div>`;
+}
+
+async function modalConsumo(ctx) {
+  const { materiais } = await api('/estoque/materiais');
+  const chave = novaChave();
+  const ativos = materiais.filter(m => m.ativo);
+  if (!ativos.length) return toast('Nenhum material cadastrado no estoque.', true);
+  modal({
+    title: 'Lançar material usado',
+    body: `<div class="grid" style="gap:12px">
+      <div class="field"><label for="cm-mat">Material</label><select class="in" id="cm-mat">${ativos.map(m => `<option value="${m.id}">${esc(m.nome)} — saldo ${String(m.quantidade).replace('.', ',')} ${esc(m.unidade)}</option>`).join('')}</select></div>
+      <div class="field"><label for="cm-qtd">Quantidade</label><input class="in num" id="cm-qtd" inputmode="decimal" placeholder="ex.: 1,5"></div>
+      <div class="field"><label for="cm-peca">Peça</label><select class="in" id="cm-peca"><option value="">OS inteira</option>${ctx.f.itens.map(i => `<option value="${i.id}">${esc(i.codigo + ' · ' + i.peca)}</option>`).join('')}</select></div>
+      ${sessao.pode('estoque.negativo') ? '<label class="chk"><input type="checkbox" id="cm-neg"> Autorizar saldo negativo</label>' : ''}</div>`,
+    actions: [{ label: 'Voltar' }, { label: 'Lançar', cls: 'pri', fn: async m => {
+      const q = Number($('#cm-qtd', m).value.trim().replace(',', '.'));
+      if (!(q > 0)) { toast('Informe a quantidade.', true); return false; }
+      try {
+        await api('/estoque/consumos', { chave, corpo: { order_id: ctx.f.id, item_id: $('#cm-peca', m).value || null, material_id: $('#cm-mat', m).value, quantidade: Math.round(q * 1000) / 1000,
+          autorizar_negativo: $('#cm-neg', m)?.checked || undefined } });
+      } catch (e) { toast(e.message, true); return false; }
+      toast('Material lançado na OS.');
+      await ctx.recarregar();
+    } }],
+  });
+}
+
+function modalReverterConsumo(ctx, id) {
+  const chave = novaChave();
+  modal({
+    title: 'Desfazer lançamento de material',
+    body: '<p style="margin:0 0 10px">O material volta para o estoque. O lançamento original continua no histórico.</p><div class="field"><label class="req" for="rv-mot">Motivo</label><input class="in" id="rv-mot" placeholder="ex.: lançado na OS errada"></div>',
+    actions: [{ label: 'Voltar' }, { label: 'Desfazer', cls: 'danger-solid', fn: async m => {
+      try { await api(`/estoque/movimentos/${id}/reverter`, { chave, corpo: { motivo: $('#rv-mot', m).value.trim() } }); } catch (e) { toast(e.message, true); return false; }
+      toast('Material devolvido ao estoque.');
+      await ctx.recarregar();
     } }],
   });
 }
@@ -703,6 +781,11 @@ function ligarEventos(ctx) {
     if (a === 'pagar') modalPagamento(ctx);
     if (a === 'estornar') modalEstorno(b.dataset.id, ctx.recarregar);
     if (a === 'wa') abrirWhatsApp(ctx, b.dataset.modelo);
+    if (a === 'agendar') return modalCompromisso({ tipo: b.dataset.tipo || 'prova', order_id: f.id, numero: f.numero, client_id: f.client_id }, ctx.recarregar);
+    if (a === 'comp') return modalCompromisso({ ...ctx.os.compromissos.find(x => x.id === b.dataset.id), order_id: f.id, numero: f.numero }, ctx.recarregar);
+    if (a === 'material') return modalConsumo(ctx);
+    if (a === 'rev-mat') return modalReverterConsumo(ctx, b.dataset.id);
+    if (a === 'wa-prova') return abrirWhatsApp(ctx, 'lembrete_prova', ctx.os.compromissos.find(x => x.id === b.dataset.id));
     if (a === 'wa-outras') modal({
       title: 'Mensagens de WhatsApp', body: `<div class="list">${Object.entries(MODELOS_MENSAGEM).map(([k, l]) => `<button class="btn" style="justify-content:flex-start;margin-bottom:6px" data-wa="${k}">${esc(l)}</button>`).join('')}</div>`,
       onOpen: m => m.addEventListener('click', ev => { const w = ev.target.closest('[data-wa]'); if (w) { fecharModal(); abrirWhatsApp(ctx, w.dataset.wa); } }),
@@ -745,32 +828,82 @@ function verFoto(ctx, id) {
 }
 
 /* =========================================================================
- * IMPRESSÃO (A4 / PDF) — comprovante de recebimento da OS
+ * DOCUMENTOS (A4 / PDF) e ETIQUETAS com QR Code
  * ======================================================================= */
+export const DOCUMENTOS = {
+  os: 'Comprovante de recebimento', orcamento: 'Orçamento', producao: 'Ordem de produção (interna)',
+  pagamento: 'Comprovante de pagamento', retirada: 'Comprovante de retirada', etiquetas: 'Etiquetas com QR Code',
+};
+
 export async function telaImpressao(el, params) {
+  const tipo = params[1] === 'etiquetas' ? 'etiquetas' : DOCUMENTOS[params[2]] ? params[2] : 'os';
   const { os, atelie } = await api(`/ordens/${params[0]}/impressao`);
   const verValores = os.total !== undefined;
-  const fone = os.cliente.telefone ? formatarTelefone(os.cliente.telefone) : '—';
-  el.innerHTML = `<div class="row nao-imprimir"><a class="btn" href="#ordens/${os.id}">← Voltar para a OS</a><button class="btn pri" data-imprimir>Imprimir / Salvar PDF</button>
-      <span class="ajuda">No celular, escolha "Salvar como PDF" na tela de impressão.</span></div>
-    <div class="a4wrap"><div class="a4">
+  const tiposDisp = Object.entries(DOCUMENTOS).filter(([k]) => verValores || !['os', 'orcamento', 'pagamento'].includes(k));
+  const barra = `<div class="row nao-imprimir"><a class="btn" href="#ordens/${os.id}">← Voltar para a OS</a>
+      <select class="in" id="doc-tipo" style="width:auto" aria-label="Documento">${tiposDisp.map(([k, l]) => `<option value="${k}" ${k === tipo ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      ${tipo === 'etiquetas' ? `<select class="in" id="et-fmt" style="width:auto" aria-label="Formato"><option value="a4-3">A4 · 3 por linha</option><option value="a4-2">A4 · 2 por linha</option><option value="termica">Etiqueta 60 × 40 mm</option></select>` : ''}
+      <button class="btn pri" data-imprimir>Imprimir / Salvar PDF</button><span class="ajuda">No celular, escolha "Salvar como PDF" na tela de impressão.</span></div>`;
+  if (tipo === 'etiquetas') {
+    el.innerHTML = barra + `<div class="a4wrap"><div class="etiquetas a4-3" id="etqs"></div></div>`;
+    const { default: qrcode } = await import('../vendor/qrcode.mjs');
+    const qr = texto => { const q = qrcode(0, 'M'); q.addData(texto); q.make(); return q.createSvgTag({ cellSize: 3, margin: 0, scalable: true }); };
+    // O QR leva só o código da peça (sem nome ou telefone da cliente); abrir exige login.
+    $('#etqs', el).innerHTML = os.itens.map(i => `<div class="etiqueta">${qr(`${location.origin}/#p/${i.codigo}`)}
+      <div><small>${esc(atelie.nome)}</small><b>${esc(i.codigo)}</b><small>${nOS(os.numero)} · ${esc(i.peca.slice(0, 28))}</small><small>Prazo ${dataBR(i.prazo || os.prazo)}</small></div></div>`).join('');
+  } else {
+    const fone = os.cliente.telefone ? formatarTelefone(os.cliente.telefone) : '—';
+    const pagos = (os.pagamentos || []).filter(p => !p.estornado_por && !p.estorno_de);
+    let fichas = [];
+    if (tipo === 'producao' && sessao.pode('medidas.ver') && sessao.pode('clientes.ver'))
+      fichas = (await api(`/clientes/${os.client_id}/medidas`).catch(() => ({ fichas: [] }))).fichas.filter(f => f.versoes.length);
+    const titulo = DOCUMENTOS[tipo];
+    const comValores = verValores && tipo !== 'producao';
+    const tabela = `<table><thead><tr><th>Código</th><th>Peça</th><th>Serviço</th><th class="r">Qtd</th>${comValores ? '<th class="r">Valor un.</th><th class="r">Subtotal</th>' : ''}
+        ${tipo === 'producao' ? '<th>Responsável</th><th>Feito</th>' : ''}</tr></thead><tbody>
+      ${os.itens.map(i => i.servicos.map((s, j) => `<tr>${j === 0 ? `<td rowspan="${i.servicos.length}" class="num">${esc(i.codigo)}</td><td rowspan="${i.servicos.length}">${esc(i.peca)}${i.urgente && tipo === 'producao' ? ' <b>(URGENTE)</b>' : ''}${i.descricao ? `<br><small>${esc(i.descricao)}</small>` : ''}${tipo === 'producao' && i.obs_interna ? `<br><small><b>Obs.:</b> ${esc(i.obs_interna)}</small>` : ''}${tipo === 'producao' && i.prazo ? `<br><small>Prazo da peça: ${dataBR(i.prazo)}</small>` : ''}</td>` : ''}
+        <td>${esc(s.descricao)}</td><td class="r">${String(s.quantidade).replace('.', ',')} ${esc(s.unidade)}</td>
+        ${comValores ? `<td class="r num">${brl(s.valor_unitario_centavos)}</td><td class="r num">${brl(s.subtotal_centavos)}</td>` : ''}
+        ${tipo === 'producao' ? (j === 0 ? `<td rowspan="${i.servicos.length}">${esc(i.responsavel_nome || '')}</td><td rowspan="${i.servicos.length}">☐</td>` : '') : ''}</tr>`).join('')).join('')}</tbody></table>`;
+    const totais = comValores ? `<div class="totais" style="min-width:220px"><span class="k">Soma</span><span class="v num">${brl(os.soma_itens)}</span>
+        <span class="k">Desconto</span><span class="v num">${brl(os.desconto_centavos)}</span><span class="k"><b>Total</b></span><span class="v num"><b>${brl(os.total)}</b></span>
+        ${tipo === 'orcamento' ? '' : `<span class="k">Pago</span><span class="v num">${brl(os.pago)}</span><span class="k"><b>Falta pagar</b></span><span class="v num"><b>${brl(Math.max(0, os.saldo))}</b></span>`}</div>` : '';
+    const camposMedida = sessao.config.campos_medida;
+    const corpo = {
+      os: () => `${tabela}<div style="display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap"><div style="flex:1;min-width:200px">
+          ${pagos.length ? '<b>Pagamentos</b><br>' + pagos.map(p => `${dataBR(p.data)} · ${esc(p.forma)} · ${brl(p.valor_centavos)}`).join('<br>') : ''}
+          ${os.observacoes ? `<div style="margin-top:10px"><b>Observações</b><br>${esc(os.observacoes)}</div>` : ''}</div>${totais}</div>`,
+      orcamento: () => `${tabela}<div style="display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap"><div style="flex:1;min-width:200px">
+          <p>Orçamento válido por 7 dias a partir de ${dataBR(sessao.hoje)}. Prazo estimado de entrega: <b>${dataBR(os.prazo)}</b>, contado a partir da aprovação.</p>
+          ${os.observacoes ? `<p><b>Observações:</b> ${esc(os.observacoes)}</p>` : ''}</div>${totais}</div>`,
+      producao: () => `${tabela}${os.observacoes ? `<div class="box"><b>Observações da OS:</b> ${esc(os.observacoes)}</div>` : ''}
+        ${os.compromissos?.filter(c => c.tipo === 'prova' && c.status === 'agendado').length ? `<div class="box"><b>Provas agendadas:</b> ${os.compromissos.filter(c => c.tipo === 'prova' && c.status === 'agendado').map(c => `${dataBR(c.dia)}${c.hora_inicio ? ' ' + esc(c.hora_inicio) : ''}`).join(', ')}</div>` : ''}
+        ${fichas.map(f => { const v = f.versoes[0]; const cps = camposMedida.filter(c => v.valores[c.id] !== undefined);
+          return `<div class="box"><b>Medidas — ${esc(f.titulo)}</b> (${dataBR(v.medido_em)})<br>${cps.map(c => `${esc(c.nome)}: <b>${String(v.valores[c.id]).replace('.', ',')} cm</b>`).join(' · ')}${v.observacoes ? `<br><i>${esc(v.observacoes)}</i>` : ''}</div>`; }).join('')}`,
+      pagamento: () => `<table><thead><tr><th>Data</th><th>Descrição</th><th>Forma</th><th class="r">Valor</th></tr></thead><tbody>
+          ${pagos.map(p => `<tr><td>${dataBR(p.data)}</td><td>${esc(p.descricao)}</td><td>${esc(p.forma)}</td><td class="r num">${brl(p.valor_centavos)}</td></tr>`).join('') || '<tr><td colspan="4">Nenhum pagamento.</td></tr>'}</tbody></table>
+        <div style="display:flex;justify-content:flex-end">${totais}</div>
+        <p>Recebemos de <b>${esc(os.cliente.nome)}</b> o valor de <b>${brl(os.pago)}</b> referente à ${nOS(os.numero)}.</p>`,
+      retirada: () => `<p>Declaro que retirei as peças abaixo, conferidas, referentes à ${nOS(os.numero)}${os.entregue_em ? `, em ${dataBR(os.entregue_em.slice(0, 10))}` : ''}.</p>
+        <table><thead><tr><th>Código</th><th>Peça</th><th>Serviços</th></tr></thead><tbody>${os.itens.map(i => `<tr><td class="num">${esc(i.codigo)}</td><td>${esc(i.peca)}</td>
+          <td>${i.servicos.map(s => esc(s.descricao)).join(', ')}</td></tr>`).join('')}</tbody></table>
+        ${verValores ? `<p>${os.saldo > 0 ? `<b>Saldo pendente na retirada: ${brl(os.saldo)}</b>` : 'Serviço totalmente pago.'}</p>` : ''}`,
+    }[tipo]();
+    el.innerHTML = barra + `<div class="a4wrap"><div class="a4">
       <div class="top"><div><h2>${esc(atelie.nome)}</h2><div>${esc(atelie.endereco)}</div><div>${esc(atelie.telefone)}${atelie.documento ? ' · ' + esc(atelie.documento) : ''}</div></div>
-        <div style="text-align:right"><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.08em">Ordem de serviço</div>
+        <div style="text-align:right"><div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.08em">${esc(titulo)}</div>
           <div style="font-size:22px;font-weight:700" class="num">${nOS(os.numero)}</div>
           <div>Abertura: <b>${dataBR(os.aberta_em)}</b></div><div>Prazo: <b>${dataBR(os.prazo)}</b></div></div></div>
-      <div class="box"><b>Cliente:</b> ${esc(os.cliente.nome)} &nbsp;·&nbsp; <b>Telefone:</b> ${esc(fone)}</div>
-      <table><thead><tr><th>Código</th><th>Peça</th><th>Serviço</th><th class="r">Qtd</th>${verValores ? '<th class="r">Valor un.</th><th class="r">Subtotal</th>' : ''}</tr></thead><tbody>
-        ${os.itens.map(i => i.servicos.map((s, j) => `<tr>${j === 0 ? `<td rowspan="${i.servicos.length}" class="num">${esc(i.codigo)}</td><td rowspan="${i.servicos.length}">${esc(i.peca)}${i.descricao ? `<br><small>${esc(i.descricao)}</small>` : ''}</td>` : ''}
-          <td>${esc(s.descricao)}</td><td class="r">${String(s.quantidade).replace('.', ',')} ${esc(s.unidade)}</td>
-          ${verValores ? `<td class="r num">${brl(s.valor_unitario_centavos)}</td><td class="r num">${brl(s.subtotal_centavos)}</td>` : ''}</tr>`).join('')).join('')}</tbody></table>
-      <div style="display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap">
-        <div style="flex:1;min-width:200px">${verValores && os.pagamentos.length ? '<b>Pagamentos</b><br>' + os.pagamentos.map(p => `${dataBR(p.data)} · ${esc(p.forma)} · ${p.tipo === 'entrada' ? '' : '− '}${brl(p.valor_centavos)}`).join('<br>') : ''}
-          ${os.observacoes ? `<div style="margin-top:10px"><b>Observações</b><br>${esc(os.observacoes)}</div>` : ''}</div>
-        ${verValores ? `<div class="totais" style="min-width:220px"><span class="k">Soma</span><span class="v num">${brl(os.soma_itens)}</span>
-          <span class="k">Desconto</span><span class="v num">${brl(os.desconto_centavos)}</span><span class="k"><b>Total</b></span><span class="v num"><b>${brl(os.total)}</b></span>
-          <span class="k">Pago</span><span class="v num">${brl(os.pago)}</span><span class="k"><b>Falta pagar</b></span><span class="v num"><b>${brl(Math.max(0, os.saldo))}</b></span></div>` : ''}</div>
-      <div style="font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:8px">${esc(atelie.rodape_os)}</div>
-      <div class="ass"><div>Assinatura da cliente</div><div>${esc(atelie.nome)}</div></div>
+      ${tipo === 'producao' ? `<div class="box"><b>Cliente:</b> ${esc(os.cliente.nome)} · <b>Documento interno — sem valores</b></div>`
+        : `<div class="box"><b>Cliente:</b> ${esc(os.cliente.nome)} &nbsp;·&nbsp; <b>Telefone:</b> ${esc(fone)}</div>`}
+      ${corpo}
+      ${tipo === 'producao' ? '' : `<div style="font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:8px">${esc(atelie.rodape_os)}</div>`}
+      <div class="ass"><div>${tipo === 'orcamento' ? 'Aprovação da cliente' : tipo === 'producao' ? 'Responsável pela produção' : 'Assinatura da cliente'}</div><div>${esc(atelie.nome)}</div></div>
     </div></div>`;
-  el.addEventListener('click', e => { if (e.target.closest('[data-imprimir]')) window.print(); });
+  }
+  el.onclick = e => { if (e.target.closest('[data-imprimir]')) window.print(); };
+  el.onchange = e => {
+    if (e.target.id === 'doc-tipo') location.hash = e.target.value === 'etiquetas' ? `ordens/${os.id}/etiquetas` : `ordens/${os.id}/imprimir/${e.target.value}`;
+    if (e.target.id === 'et-fmt') $('#etqs', el).className = `etiquetas ${e.target.value}`;
+  };
 }
