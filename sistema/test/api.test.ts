@@ -59,6 +59,9 @@ describe('login e sessão', () => {
     expect((await chamar('/auth/senha', { cookie: ck, corpo: { atual: SENHA, nova: SENHA } })).status).toBe(422);
     expect((await chamar('/auth/senha', { cookie: ck, corpo: { atual: SENHA, nova: 'minha-senha-nova' } })).status).toBe(200);
     expect((await chamar('/clientes', { cookie: ck })).status).toBe(200);
+    // senha de 6 dígitos é aceita; menos que isso, não
+    expect((await chamar('/usuarios', { cookie: adm, corpo: { nome: 'Seis', email: `seis${login}@teste.com`, papel: 'costureira', senha: '101010' } })).status).toBe(201);
+    expect((await chamar('/usuarios', { cookie: adm, corpo: { nome: 'Cinco', email: `cinco${login}@teste.com`, papel: 'costureira', senha: '10101' } })).status).toBe(422);
     const dup = await chamar('/usuarios', { cookie: adm, corpo: { nome: 'Outra', email: `x${login}@teste.com`, login, papel: 'atendente', senha: SENHA } });
     expect(dup.status).toBe(409);
   });

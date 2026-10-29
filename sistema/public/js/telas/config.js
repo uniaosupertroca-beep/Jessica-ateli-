@@ -35,7 +35,7 @@ function abaConta(alvo) {
   alvo.innerHTML = `<div class="panel" style="max-width:480px;margin-top:12px"><h2>Trocar senha</h2>
     <p class="muted" style="margin:0">${esc(sessao.eu.nome)} · ${esc(sessao.eu.email)}</p>
     <div class="field"><label for="s-atual">Senha atual</label><input class="in" type="password" id="s-atual" autocomplete="current-password"></div>
-    <div class="field"><label for="s-nova">Nova senha (mínimo 10 caracteres)</label><input class="in" type="password" id="s-nova" autocomplete="new-password"></div>
+    <div class="field"><label for="s-nova">Nova senha (mínimo 6 caracteres)</label><input class="in" type="password" id="s-nova" autocomplete="new-password"></div>
     <button class="btn pri" id="s-ok">Trocar senha</button><p class="ajuda" style="margin:0">Ao trocar, as sessões abertas em outros aparelhos são encerradas.</p></div>`;
   $('#s-ok', alvo).onclick = async () => {
     try {
@@ -166,7 +166,7 @@ async function abaUsuarios(alvo, depois) {
       ${u ? '' : '<div class="field"><label class="req" for="u-email">E-mail</label><input class="in" id="u-email" type="email"></div>'}
       <div class="field"><label for="u-login">Usuário para entrar (opcional)</label><input class="in" id="u-login" autocapitalize="none" value="${esc(u?.login || '')}" placeholder="ex.: maria"></div>
       <div class="field"><label for="u-papel">Perfil</label><select class="in" id="u-papel">${Object.entries(PAP).map(([k, l]) => `<option value="${k}" ${u?.papel === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-      <div class="field"><label ${u ? '' : 'class="req"'} for="u-senha">${u ? 'Nova senha temporária (deixe vazio para manter)' : 'Senha inicial (mínimo 10 caracteres; a pessoa troca no primeiro acesso)'}</label><input class="in" id="u-senha" type="password" autocomplete="new-password"></div>
+      <div class="field"><label ${u ? '' : 'class="req"'} for="u-senha">${u ? 'Nova senha temporária (deixe vazio para manter)' : 'Senha inicial (mínimo 6 caracteres; a pessoa troca no primeiro acesso)'}</label><input class="in" id="u-senha" type="password" autocomplete="new-password"></div>
       ${u ? `<label class="chk"><input type="checkbox" id="u-ativo" ${u.ativo ? 'checked' : ''}> Acesso ativo</label>` : ''}</div>`,
     actions: [{ label: 'Voltar' }, { label: 'Salvar', cls: 'pri', fn: async m => {
       const senha = $('#u-senha', m).value;

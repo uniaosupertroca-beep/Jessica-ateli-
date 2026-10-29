@@ -52,7 +52,7 @@ export function identificador(texto: string) {
 }
 
 export function validarSenhaNova(senha: string) {
-  if (senha.length < 10) throw new ErroApp(422, 'senha_fraca', 'A senha precisa ter pelo menos 10 caracteres.');
+  if (senha.length < 6) throw new ErroApp(422, 'senha_fraca', 'A senha precisa ter pelo menos 6 caracteres.');
   if (senha.length > 200) throw new ErroApp(422, 'senha_longa', 'Senha muito longa.');
 }
 

@@ -13,6 +13,23 @@ export function linhaOS(o, extra = '') {
       ? `<div class="s num" style="margin-top:3px">${o.saldo > 0 ? 'falta ' + brl(o.saldo) : 'pago'}</div>` : ''}</div></a>`;
 }
 
+// Ícones no estilo Lucide (traço), usados nos cartões de estatística.
+const ICO = {
+  entrega: '<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="17.5" r="1.6"/><circle cx="17" cy="17.5" r="1.6"/>',
+  pronta: '<path d="M20 6 9 17l-5-5"/>',
+  tesoura: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/>',
+  alerta: '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  caixa: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>',
+  receber: '<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  mes: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 6-6"/>',
+};
+const icone = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICO[k]}</svg>`;
+
+/** Cartão de estatística (padrão "Stats Card" do 21st.dev): título + ícone, valor grande, linha de apoio. */
+const cartao = (lbl, val, sub, ico, tom = '', cor = '') => `<div class="panel stat">
+  <div class="topo"><span class="lbl">${lbl}</span><span class="ico ${tom}">${icone(ico)}</span></div>
+  <span class="val num" ${cor ? `style="color:${cor}"` : ''}>${val}</span><span class="sub">${sub}</span></div>`;
+
 const lista = (itens, vazio, extra) => itens.length ? itens.map(o => linhaOS(o, extra?.(o))).join('') : `<div class="empty">${vazio}</div>`;
 
 export async function telaInicio(el) {
@@ -27,16 +44,15 @@ export async function telaInicio(el) {
       <div class="row">${podeCriar ? '<a class="btn pri" href="#ordens/nova">+ Nova OS</a>' : ''}
         ${sessao.pode('clientes.editar') ? '<a class="btn" href="#clientes/nova">+ Nova cliente</a>' : ''}</div></div>
     <div class="grid g4">
-      <div class="panel stat"><span class="lbl">Entregas hoje</span><span class="val num">${k.entregas_hoje ?? 0}<span class="muted" style="font-size:1rem">/${d.capacidade}</span></span><span class="sub">prazo em ${dataBR(d.hoje)}</span></div>
-      <div class="panel stat"><span class="lbl">Prontas p/ retirada</span><span class="val num">${k.prontas ?? 0}</span><span class="sub">aguardando a cliente</span></div>
-      <div class="panel stat"><span class="lbl">Em produção</span><span class="val num">${k.em_producao ?? 0}</span><span class="sub">${k.aguardando_prova ?? 0} aguardando prova</span></div>
-      <div class="panel stat"><span class="lbl">Atrasadas</span><span class="val num" style="color:${k.atrasadas ? 'var(--crit)' : 'inherit'}">${k.atrasadas ?? 0}</span><span class="sub">${k.abertas ?? 0} OS em aberto</span></div>
+      ${cartao('Entregas hoje', `${k.entregas_hoje ?? 0}<span class="muted" style="font-size:1rem">/${d.capacidade}</span>`, `prazo em ${dataBR(d.hoje)}`, 'entrega')}
+      ${cartao('Prontas p/ retirada', k.prontas ?? 0, 'aguardando a cliente', 'pronta', 'ok')}
+      ${cartao('Em produção', k.em_producao ?? 0, `${k.aguardando_prova ?? 0} aguardando prova`, 'tesoura', 'info')}
+      ${cartao('Atrasadas', k.atrasadas ?? 0, `${k.abertas ?? 0} OS em aberto`, 'alerta', k.atrasadas ? 'crit' : 'warn', k.atrasadas ? 'var(--crit)' : '')}
     </div>
     ${f ? `<div class="grid g3">
-      <div class="panel stat"><span class="lbl">Caixa de hoje</span><span class="val num">${brl(f.entradas_hoje - f.saidas_hoje)}</span>
-        <span class="sub">${f.caixa_aberto ? 'aberto' : f.caixa_existe ? 'fechado' : 'não aberto'} · entradas ${brl(f.entradas_hoje)}</span></div>
-      <div class="panel stat"><span class="lbl">A receber</span><span class="val num" style="color:var(--warn)">${brl(f.a_receber)}</span><span class="sub">saldo de OS não canceladas</span></div>
-      <div class="panel stat"><span class="lbl">Recebido no mês</span><span class="val num" style="color:var(--ok)">${brl(f.recebido_mes)}</span><span class="sub">pagamentos de clientes, já descontados estornos</span></div>
+      ${cartao('Caixa de hoje', brl(f.entradas_hoje - f.saidas_hoje), `${f.caixa_aberto ? 'aberto' : f.caixa_existe ? 'fechado' : 'não aberto'} · entradas ${brl(f.entradas_hoje)}`, 'caixa')}
+      ${cartao('A receber', brl(f.a_receber), 'saldo de OS não canceladas', 'receber', 'warn', 'var(--warn)')}
+      ${cartao('Recebido no mês', brl(f.recebido_mes), 'pagamentos de clientes, já descontados estornos', 'mes', 'ok', 'var(--ok)')}
     </div>` : ''}
     <div class="grid g2">
       <div class="panel"><div class="panel-h"><h2>Entregas de hoje</h2><span class="muted">${dataSemana(d.hoje)}</span></div><div class="list">${lista(d.entregas_hoje, 'Nenhuma entrega hoje.')}</div></div>

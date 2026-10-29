@@ -39,7 +39,7 @@ Os buckets R2 são privados por padrão. **Não** ative "Public access" em nenhu
 ## 3. Segredo do primeiro acesso
 
 ```bash
-npx wrangler secret put SETUP_TOKEN --env homologacao   # um código longo e aleatório (16+ caracteres)
+npx wrangler secret put SETUP_TOKEN --env homologacao   # um código longo e aleatório (16 ou mais caracteres)
 npx wrangler secret put SETUP_TOKEN                     # produção
 ```
 

@@ -45,7 +45,7 @@ export function telaConfigurarInicial(el, aoEntrar) {
     campos: `<div class="field"><label for="c-token">Código de configuração</label><input class="in" id="c-token" name="token" autocomplete="off" required></div>
       <div class="field"><label for="c-nome">Seu nome</label><input class="in" id="c-nome" name="nome" autocomplete="name" required></div>
       <div class="field"><label for="c-email">E-mail</label><input class="in" id="c-email" name="email" type="email" autocomplete="username" required></div>
-      <div class="field"><label for="c-senha">Senha (mínimo 10 caracteres)</label><input class="in" id="c-senha" name="senha" type="password" autocomplete="new-password" minlength="10" required></div>`,
+      <div class="field"><label for="c-senha">Senha (mínimo 6 caracteres)</label><input class="in" id="c-senha" name="senha" type="password" autocomplete="new-password" minlength="6" required></div>`,
     botao: 'Criar conta e entrar',
     async enviar(d) {
       await api('/auth/configurar', { corpo: d });
@@ -58,13 +58,13 @@ export function telaConfigurarInicial(el, aoEntrar) {
 export function telaTrocarSenha(el, aoConcluir) {
   formulario(el, {
     titulo: 'Crie sua senha',
-    texto: 'Você entrou com a senha inicial. Para proteger os dados das clientes, escolha uma senha só sua (mínimo 10 caracteres).',
+    texto: 'Você entrou com a senha inicial. Para proteger os dados das clientes, escolha uma senha só sua (mínimo 6 caracteres).',
     campos: `<div class="field"><label for="t-atual">Senha inicial</label><input class="in" id="t-atual" name="atual" type="password" autocomplete="current-password" required></div>
-      <div class="field"><label for="t-nova">Nova senha</label><input class="in" id="t-nova" name="nova" type="password" autocomplete="new-password" minlength="10" required></div>
+      <div class="field"><label for="t-nova">Nova senha</label><input class="in" id="t-nova" name="nova" type="password" autocomplete="new-password" minlength="6" required></div>
       <div class="field"><label for="t-conf">Repita a nova senha</label><input class="in" id="t-conf" name="conf" type="password" autocomplete="new-password" required></div>`,
     botao: 'Salvar senha e entrar',
     async enviar(d) {
-      if (d.nova.length < 10) throw new Error('A nova senha precisa ter pelo menos 10 caracteres.');
+      if (d.nova.length < 6) throw new Error('A nova senha precisa ter pelo menos 6 caracteres.');
       if (d.nova !== d.conf) throw new Error('As duas senhas não são iguais.');
       await api('/auth/senha', { corpo: { atual: d.atual, nova: d.nova } });
       aoConcluir();
