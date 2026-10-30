@@ -2,6 +2,7 @@ import { api, sessao } from '../api.js';
 import { $, brl, dataBR, dataHora, dataSemana, esc, nOS, pill } from '../ui.js';
 import { barras } from '../graficos.js';
 import { FUSO, linkWhatsApp, montarMensagem, numeroWhatsApp, STATUS_OS, STATUS_PRODUCAO } from '../regras.js';
+import { avisoInicio } from '../instalar.js';
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
@@ -61,6 +62,7 @@ export async function telaInicio(el) {
       msg: montarMensagem('retirada', { atelie: sessao.config.atelie.nome, cliente: o.cliente, numero: o.numero, pecas: (o.pecas || '').split(', '), saldo: Math.max(0, o.saldo ?? 0) }) })),
   ];
   el.innerHTML = `
+    ${avisoInicio()}
     <div class="head"><div><h1>${semana}, ${dia} de ${MESES[m - 1]} de ${a}</h1><p>Olá, ${esc(sessao.eu.nome.split(' ')[0])}. Resumo do ateliê hoje.</p></div></div>
     <div class="row">${atalhos}</div>
     ${avisos}

@@ -3,8 +3,8 @@
 // - NUNCA guarda respostas da API (/api/*): dados de clientes, fotos e valores ficam só no servidor.
 // - Sempre tenta a rede primeiro; o cache só é usado sem internet.
 // - Uma versão nova fica "esperando" até a pessoa tocar em "Atualizar" (atualização controlada).
-const VERSAO = 'atelie-v8';
-const ESSENCIAIS = ['/', '/index.html', '/css/app.css', '/js/app.js', '/js/api.js', '/js/ui.js', '/js/regras.js', '/js/busca.js', '/js/graficos.js', '/js/documento.js', '/js/pdf.js',
+const VERSAO = 'atelie-v9';
+const ESSENCIAIS = ['/', '/index.html', '/css/app.css', '/js/app.js', '/js/api.js', '/js/ui.js', '/js/regras.js', '/js/busca.js', '/js/graficos.js', '/js/documento.js', '/js/pdf.js', '/js/instalar.js',
   '/manifest.webmanifest', '/icones/icone-192.png', '/icones/icone.svg'];
 
 self.addEventListener('install', e => {

@@ -14,6 +14,7 @@ import { telaRelatorios } from './telas/relatorios.js';
 import { telaServicos } from './telas/servicos.js';
 import { telaMedidas } from './telas/medidas.js';
 import { barraTopo } from './busca.js';
+import { botaoMenu } from './instalar.js';
 
 const ICONES = {
   inicio: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
@@ -74,7 +75,7 @@ function desenharMenu(atual) {
   const itens = itensMenu();
   $('#nav-side').innerHTML = itens.map(([k, l]) => `<a href="#${k}" class="${k === atual ? 'on' : ''}" ${k === atual ? 'aria-current="page"' : ''}>${svg(k)}${esc(l)}</a>`).join('');
   $('#side-usuario').innerHTML = `<span><b>${esc(sessao.eu.nome)}</b><br><span class="muted">${esc({ admin: 'Administrador', atendente: 'Atendente', costureira: 'Costureira' }[sessao.eu.papel])}</span></span>
-    <button class="btn sm ghost" data-sair>Sair</button>`;
+    <button class="btn sm ghost" data-sair>Sair</button>${botaoMenu('btn sm ghost instalar-side')}`;
   // Celular: até 4 atalhos fixos + "Mais" com o restante (erro 6 corrigido).
   const fixos = itens.slice(0, itens.length > 5 ? 4 : 5);
   const resto = itens.slice(fixos.length);
@@ -82,7 +83,7 @@ function desenharMenu(atual) {
   $('#nav-bottom').innerHTML = fixos.map(([k]) => `<a href="#${k}" class="${k === atual ? 'on' : ''}">${svg(k)}<span>${CURTO[k]}</span></a>`).join('') +
     `<button type="button" data-mais class="${noResto ? 'on' : ''}" aria-haspopup="true">${svg('mais')}<span>Mais</span></button>`;
   $('#mais').innerHTML = `<div class="mais-box" role="menu">${resto.map(([k, l]) => `<a href="#${k}" class="${k === atual ? 'on' : ''}" role="menuitem">${svg(k)}${esc(l)}</a>`).join('')}
-    <button type="button" data-sair role="menuitem">${svg('sair')}Sair (${esc(sessao.eu.nome)})</button></div>`;
+    ${botaoMenu()}<button type="button" data-sair role="menuitem">${svg('sair')}Sair (${esc(sessao.eu.nome)})</button></div>`;
   $('#brand-nome').textContent = sessao.config?.atelie?.nome || 'Ateliê Jessica';
 }
 
@@ -148,6 +149,11 @@ document.addEventListener('click', e => {
   if (e.target.id === 'mais') $('#mais').hidden = true;
 });
 window.addEventListener('hashchange', () => { renderizar(); window.scrollTo(0, 0); });
+// a opção "Instalar app" aparece/some conforme o navegador permite ou o app é instalado
+window.addEventListener('instalacao-mudou', () => { if (sessao.eu) renderizar(); else iniciar(); });
+// sem zoom por pinça ou toque duplo no celular (o layout já se ajusta à tela)
+document.addEventListener('gesturestart', e => e.preventDefault(), { passive: false });
+document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 window.addEventListener('unidade-trocada', async () => { await carregarConfig().catch(() => {}); renderizar(); });
 window.addEventListener('sessao-expirada', () => {
   if (!sessao.eu) return;

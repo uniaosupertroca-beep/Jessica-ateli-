@@ -361,3 +361,15 @@ table td.num,table td.r.num{white-space:nowrap}
 .gerando-pdf{width:733px!important;max-width:733px!important;min-height:0!important;margin:0!important;box-shadow:none!important;background:#fff!important}
 .a4.gerando-pdf{padding:20px 22px!important}
 .etiquetas.termica.gerando-pdf{width:227px!important;max-width:227px!important}
+
+/* Celular sem zoom (toque duplo/pinça); o layout já se adapta à tela */
+html{touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+/* Instalar o app (PWA) */
+.instalar-side{display:inline-flex;align-items:center;gap:6px;margin-top:6px;width:100%;justify-content:center}
+.instalar-side svg,.mais-box [data-instalar] svg{width:18px;height:18px}
+.mais-box [data-instalar]{color:var(--accent);font-weight:600}
+.aviso-instalar{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--accent-soft);border-radius:var(--r);padding:12px 14px;box-shadow:var(--sombra);margin-bottom:14px}
+.aviso-instalar img{border-radius:12px;flex:none}
+.aviso-instalar div{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.aviso-instalar span{font-size:.85rem;color:var(--muted)}
+.aviso-instalar .x{background:none;border:0;font-size:22px;color:var(--muted);width:32px;height:32px;cursor:pointer;flex:none}

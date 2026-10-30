@@ -1,5 +1,6 @@
 import { api } from '../api.js';
 import { $, comBotao, esc } from '../ui.js';
+import { podeInstalar } from '../instalar.js';
 
 function formulario(el, { titulo, texto, campos, botao, enviar }) {
   el.innerHTML = `<div class="login"><form class="panel" novalidate>
@@ -8,7 +9,8 @@ function formulario(el, { titulo, texto, campos, botao, enviar }) {
       <h1 style="font-size:1.35rem">${esc(titulo)}</h1>${texto ? `<p class="muted" style="margin:0">${texto}</p>` : ''}
       ${campos}
       <div id="login-erro" class="alert a-crit" hidden role="alert"></div>
-      <button class="btn pri" type="submit">${esc(botao)}</button></form></div>`;
+      <button class="btn pri" type="submit">${esc(botao)}</button>
+      ${podeInstalar() ? '<button class="btn ghost" type="button" data-instalar>Instalar o app neste aparelho</button>' : ''}</form></div>`;
   const form = $('form', el);
   form.addEventListener('submit', e => {
     e.preventDefault();
