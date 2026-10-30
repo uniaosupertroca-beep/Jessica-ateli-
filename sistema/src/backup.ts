@@ -5,7 +5,7 @@ import type { Env } from './env';
  * Sessões e tentativas de login ficam de fora: são temporárias e contêm dados de acesso.
  */
 export const TABELAS_BACKUP = [
-  'users', 'units', 'user_units', 'system_settings', 'payment_methods', 'finance_categories', 'measurement_fields', 'service_categories', 'service_catalog',
+  'users', 'units', 'user_units', 'user_permissions', 'system_settings', 'payment_methods', 'finance_categories', 'measurement_fields', 'service_categories', 'service_catalog',
   'clients', 'orders', 'order_items', 'order_item_services', 'order_status_history', 'order_photos',
   'client_measurements', 'measurement_versions', 'measurement_values',
   'suppliers', 'materials', 'purchases', 'payables',

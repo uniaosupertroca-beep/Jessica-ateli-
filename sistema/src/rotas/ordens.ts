@@ -93,7 +93,8 @@ export async function carregarOS(c: Context<AppEnv>, id: string) {
   const db = c.env.DB;
   const vis = filtroVisibilidade(c);
   const os = await db.prepare(
-    `SELECT o.*, t.soma_itens, t.total, t.pago, (t.total - t.pago) AS saldo, r.nome AS responsavel_nome, un.nome AS unidade_nome, un.sigla AS unidade_sigla
+    `SELECT o.*, t.soma_itens, t.total, t.pago, (t.total - t.pago) AS saldo, r.nome AS responsavel_nome, un.nome AS unidade_nome, un.sigla AS unidade_sigla,
+       (SELECT nome FROM users WHERE id = o.aprovada_por) AS aprovada_por_nome, (SELECT nome FROM users WHERE id = o.entregue_por) AS entregue_por_nome
      FROM orders o JOIN vw_order_totals t ON t.order_id = o.id LEFT JOIN users r ON r.id = o.responsavel_id JOIN units un ON un.id = o.unit_id
      WHERE o.id = ? AND ${vis.sql}`,
   ).bind(id, ...vis.binds).first<Record<string, unknown>>();
@@ -380,10 +381,14 @@ rotasOrdens.post('/:id/status', async c => {
     para: z.string(),
     motivo: z.string().trim().max(500).optional(),
     confirmar_saldo_pendente: z.boolean().optional(),
+    aprovacao_meio: z.enum(['presencial', 'whatsapp', 'telefone', 'outro']).optional(), // como a cliente aprovou o orçamento
+    retirado_por: z.string().trim().max(120).optional(),                                 // quem levou as peças
+    devolver_materiais: z.boolean().optional(),                                          // no cancelamento
   }));
   const os = await db.prepare(
-    `SELECT o.status, o.status_antes_pausa, t.total, t.pago FROM orders o JOIN vw_order_totals t ON t.order_id = o.id WHERE o.id = ?`,
-  ).bind(id).first<{ status: string; status_antes_pausa: string | null; total: number; pago: number }>();
+    `SELECT o.status, o.status_antes_pausa, t.total, t.pago, c.nome AS cliente FROM orders o JOIN vw_order_totals t ON t.order_id = o.id
+       JOIN clients c ON c.id = o.client_id WHERE o.id = ?`,
+  ).bind(id).first<{ status: string; status_antes_pausa: string | null; total: number; pago: number; cliente: string }>();
   if (!os) throw naoEncontrado('Ordem de serviço');
   if (!transicoesManuais(os.status).includes(d.para))
     throw new ErroApp(409, 'transicao_invalida', `Não é possível ir de "${STATUS_OS[os.status as keyof typeof STATUS_OS]}" para essa situação.`);
@@ -399,6 +404,14 @@ rotasOrdens.post('/:id/status', async c => {
     extra.push(db.prepare("INSERT INTO guards (motivo) SELECT 'os_com_pagamento' FROM vw_order_totals WHERE order_id = ? AND pago <> 0").bind(id));
     sets = ', motivo = ?, cancelada_em = ?';
     binds.push(d.motivo, em);
+    // Compromissos ainda marcados desta OS deixam de valer (provas, entregas, retiradas).
+    extra.push(db.prepare("UPDATE appointments SET status = 'cancelado', atualizado_em = ? WHERE order_id = ? AND status = 'agendado'").bind(em, id));
+    // Materiais lançados e ainda não revertidos voltam ao estoque da mesma unidade, se pedido.
+    if (d.devolver_materiais) extra.push(db.prepare(`INSERT INTO stock_movements (id, material_id, unit_id, tipo, quantidade, custo_unitario_centavos,
+        order_id, item_id, reverte_de, motivo, autorizado_negativo, criado_em, criado_por)
+      SELECT lower(hex(randomblob(16))), sm.material_id, sm.unit_id, 'reversao', -sm.quantidade, sm.custo_unitario_centavos, sm.order_id, sm.item_id, sm.id,
+        'OS cancelada: material devolvido', 0, ?, ? FROM stock_movements sm
+      WHERE sm.order_id = ? AND sm.tipo = 'consumo' AND NOT EXISTS (SELECT 1 FROM stock_movements r WHERE r.reverte_de = sm.id)`).bind(em, u, id));
   } else if (para === 'pausada') {
     if (!d.motivo) throw new ErroApp(422, 'motivo', 'Informe o motivo da pausa.');
     sets = ', motivo = ?, status_antes_pausa = ?';
@@ -410,8 +423,12 @@ rotasOrdens.post('/:id/status', async c => {
     const saldo = os.total - os.pago;
     if (saldo > 0 && !d.confirmar_saldo_pendente)
       throw new ErroApp(409, 'saldo_pendente', 'Esta OS ainda tem saldo a receber. Confirme para entregar mesmo assim.', { saldo });
-    sets = ', entregue_em = ?';
-    binds.push(em);
+    sets = ', entregue_em = ?, retirado_por_nome = ?, entregue_por = ?';
+    binds.push(em, d.retirado_por || os.cliente, u);
+  } else if (para === 'aprovada' && ['recebida', 'aguardando_aprovacao'].includes(os.status)) {
+    // Aceite do orçamento: como a cliente aprovou, quando e quem registrou.
+    sets = ', aprovacao_meio = ?, aprovada_em = ?, aprovada_por = ?';
+    binds.push(d.aprovacao_meio ?? 'presencial', em, u);
   } else if (para === 'aguardando_aprovacao' && os.status === 'aprovada') {
     const iniciou = await db.prepare("SELECT 1 FROM order_items WHERE order_id = ? AND status_producao <> 'aguardando'").bind(id).first();
     if (iniciou) throw new ErroApp(409, 'producao_iniciada', 'A produção já começou; não é possível voltar para aprovação.');
@@ -424,7 +441,7 @@ rotasOrdens.post('/:id/status', async c => {
       db.prepare('INSERT INTO order_status_history (id, order_id, de, para, motivo, user_id, em) VALUES (?,?,?,?,?,?,?)')
         .bind(uuid(), id, os.status, para, d.motivo ?? null, u, em),
       ...(STATUS_DE_PRODUCAO.includes(para) ? recalcularStatus(db, id, u, em) : []),
-      auditoria(c, 'status', 'orders', id, { de: os.status, para, motivo: d.motivo }),
+      auditoria(c, 'status', 'orders', id, { de: os.status, para, motivo: d.motivo, aprovacao_meio: d.aprovacao_meio, retirado_por: d.retirado_por, devolver_materiais: d.devolver_materiais }),
     ]);
   } catch (e) {
     throw traduzirErroBanco(e) ?? e;

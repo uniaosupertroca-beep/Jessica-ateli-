@@ -2,7 +2,7 @@ import type { Context, Next } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import type { AppEnv, Papel, Usuario } from '../env';
 import { ErroApp } from './erros';
-import { permissoesDo } from './permissoes';
+import { permissoesEfetivas } from './permissoes';
 import { agora, ip, uuid } from './util';
 
 export const COOKIE = '__Host-sid';
@@ -86,7 +86,9 @@ export async function exigirLogin(c: Context<AppEnv>, next: Next) {
     throw new ErroApp(401, 'sessao_expirada', 'Sua sessão terminou. Entre novamente.');
   }
   c.set('usuario', u);
-  c.set('perms', permissoesDo(u.papel as Papel));
+  const ajustes = u.papel === 'admin' ? [] : (await c.env.DB.prepare('SELECT permissao, concedida FROM user_permissions WHERE user_id = ?')
+    .bind(u.id).all<{ permissao: string; concedida: number }>()).results;
+  c.set('perms', permissoesEfetivas(u.papel as Papel, ajustes));
   c.set('sessaoId', id);
   // Senha inicial/temporária: só permite trocar a senha (e ver os próprios dados ou sair).
   const livre = /\/auth\/(eu|senha|sair)$/.test(new URL(c.req.url).pathname);

@@ -1,6 +1,6 @@
 import { api, novaChave, sessao } from '../api.js';
 import { $, brl, dataBR, dataHora, esc, fecharModal, formatarTelefone, modal, nOS, pill, tagUn, toast } from '../ui.js';
-import { lerValor, linkWhatsApp, MODELOS_MENSAGEM, normalizarTelefone, numeroWhatsApp, valorParaCampo } from '../regras.js';
+import { lerValor, linkWhatsApp, MODELOS_MENSAGEM, normalizarTelefone, ORIGENS_CLIENTE, numeroWhatsApp, valorParaCampo } from '../regras.js';
 import { modalAbrirCaixa, modalEstorno } from './ordens.js';
 import { cabecalhoDoc, estiloDoc } from '../documento.js';
 
@@ -15,6 +15,8 @@ function camposCliente(c = {}) {
     <div class="field"><label for="c-wa">WhatsApp (se for outro número)</label><input class="in" id="c-wa" name="whatsapp" inputmode="tel" placeholder="Igual ao telefone" value="${c.whatsapp ? formatarTelefone(c.whatsapp) : ''}"></div>
     <div class="field"><label for="c-email">E-mail</label><input class="in" id="c-email" name="email" type="email" value="${v('email')}"></div>
     <div class="field"><label for="c-nasc">Data de nascimento</label><input class="in" id="c-nasc" name="nascimento" type="date" max="${sessao.hoje}" value="${v('nascimento')}"></div>
+    <div class="field"><label for="c-origem">Como conheceu o ateliê</label><select class="in" id="c-origem" name="origem"><option value="">— não informado —</option>
+      ${Object.entries(ORIGENS_CLIENTE).map(([k, l]) => `<option value="${k}" ${v('origem') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
     <div class="field" style="grid-column:1/-1"><label for="c-end">Endereço</label><input class="in" id="c-end" name="endereco" value="${v('endereco')}"></div>
     <div class="field" style="grid-column:1/-1"><label for="c-pref">Preferências de atendimento</label><input class="in" id="c-pref" name="preferencias" placeholder="Ex.: prefere barra italiana; avisar por WhatsApp à tarde" value="${v('preferencias')}"></div>
     <div class="field" style="grid-column:1/-1"><label for="c-obs">Observações</label><textarea class="in" id="c-obs" name="observacoes" placeholder="Ex.: alergia a níquel">${v('observacoes')}</textarea></div>
@@ -32,7 +34,7 @@ function lerCampos(m) {
   }
   if (g('nome').length < 2) throw new Error('Informe o nome completo.');
   return { nome: g('nome'), telefone: g('telefone') || null, whatsapp: g('whatsapp') || null, email: g('email') || null,
-    nascimento: g('nascimento') || null, endereco: g('endereco') || null, preferencias: g('preferencias'), observacoes: g('observacoes') };
+    nascimento: g('nascimento') || null, endereco: g('endereco') || null, preferencias: g('preferencias'), observacoes: g('observacoes'), origem: g('origem') || null };
 }
 
 /** Salva a cliente; se o servidor apontar possível duplicidade, mostra as candidatas e pede confirmação. */
@@ -146,6 +148,7 @@ export async function telaCliente(el, params, vivo) {
       <dt>E-mail</dt><dd>${esc(c.email || '—')}</dd>
       <dt>Nascimento</dt><dd>${c.nascimento ? dataBR(c.nascimento) : '—'}</dd>
       <dt>Endereço</dt><dd>${esc(c.endereco || '—')}</dd>
+      <dt>Como conheceu</dt><dd>${esc(ORIGENS_CLIENTE[c.origem] || '—')}</dd>
       <dt>Preferências</dt><dd>${esc(c.preferencias || '—')}</dd>
       <dt>Observações</dt><dd>${esc(c.observacoes || '—')}</dd></dl></div>
     <div class="tabs" role="tablist">${ABAS.filter(([k]) => k !== 'financeiro' || verValores).filter(([k]) => k !== 'medidas' || sessao.pode('medidas.ver'))

@@ -168,7 +168,7 @@ async function abaUsuarios(alvo, depois) {
       <b>Costureira:</b> vê as peças atribuídas a ela e atualiza a produção, sem valores.</p>
     <div class="tw"><table><thead><tr><th>Nome</th><th>Usuário</th><th>E-mail</th><th>Perfil</th>${multi ? '<th>Unidades</th>' : ''}<th>Produção/dia</th><th>Desde</th><th></th></tr></thead><tbody>
       ${usuarios.map(u => `<tr style="${u.ativo ? '' : 'opacity:.5'}"><td>${esc(u.nome)}${u.trocar_senha ? ' <span class="pill p-warn">senha inicial</span>' : ''}</td><td>${esc(u.login || '—')}</td><td>${esc(u.email)}</td><td>${PAP[u.papel]}</td>${multi ? `<td>${u.papel === 'admin' ? '<span class="muted">todas</span>' : (u.unidades || []).map(id => `<span class="tag-un">${esc(siglaDe(id))}</span>`).join(' ') || '<span class="pill p-warn">nenhuma</span>'}</td>` : ''}<td>${u.capacidade_min_dia ? duracao(u.capacidade_min_dia) + ' · ' + diasTexto(u.dias_trabalho) : '—'}</td><td>${dataBR(u.criado_em)}</td>
-        <td class="r"><button class="btn sm" data-ed="${u.id}">Editar</button></td></tr>`).join('')}</tbody></table></div></div>`;
+        <td class="r" style="white-space:nowrap">${u.papel !== 'admin' ? `<button class="btn sm ghost" data-perm="${u.id}">Permissões</button> ` : ''}<button class="btn sm" data-ed="${u.id}">Editar</button></td></tr>`).join('')}</tbody></table></div></div>`;
   const form = u => modal({
     title: u ? 'Editar pessoa' : 'Nova pessoa da equipe',
     body: `<div class="grid" style="gap:12px">
@@ -198,10 +198,33 @@ async function abaUsuarios(alvo, depois) {
       depois();
     } }],
   });
+  const permissoes = async u => {
+    const { permissoes: lista } = await api(`/usuarios/${u.id}/permissoes`);
+    modal({
+      wide: true,
+      title: `Permissões de ${u.nome}`,
+      body: `<p class="ajuda" style="margin:0 0 10px">Começa pelo perfil <b>${PAP[u.papel]}</b>. Marque ou desmarque para ajustar só esta pessoa.
+          Itens com <span class="pill p-warn">ajustado</span> são diferentes do perfil. Configurações, equipe e backups ficam só com o administrador.</p>
+        <div class="grid g2" style="gap:6px 18px">${lista.map(p => `<label class="chk"><input type="checkbox" data-pm="${p.id}" ${p.ativa ? 'checked' : ''}> ${esc(p.nome)}
+          ${p.ativa !== p.do_perfil ? '<span class="pill p-warn">ajustado</span>' : ''}</label>`).join('')}</div>`,
+      actions: [{ label: 'Voltar' }, { label: 'Voltar ao padrão do perfil', fn: async () => {
+        try { await api(`/usuarios/${u.id}/permissoes`, { metodo: 'PUT', corpo: { permissoes: lista.filter(p => p.do_perfil).map(p => p.id) } }); }
+        catch (e) { toast(e.message, true); return false; }
+        toast('Permissões voltaram ao padrão do perfil.');
+      } }, { label: 'Salvar permissões', cls: 'pri', fn: async m => {
+        const marcadas = [...m.querySelectorAll('[data-pm]')].filter(x => x.checked).map(x => x.dataset.pm);
+        try { await api(`/usuarios/${u.id}/permissoes`, { metodo: 'PUT', corpo: { permissoes: marcadas } }); }
+        catch (e) { toast(e.message, true); return false; }
+        toast('Permissões salvas. Valem no próximo clique da pessoa.');
+      } }],
+    });
+  };
   alvo.onclick = e => {
     if (e.target.closest('[data-novo]')) form(null);
     const ed = e.target.closest('[data-ed]');
     if (ed) form(usuarios.find(u => u.id === ed.dataset.ed));
+    const pm = e.target.closest('[data-perm]');
+    if (pm) permissoes(usuarios.find(u => u.id === pm.dataset.perm)).catch(err => toast(err.message, true));
   };
 }
 

@@ -124,6 +124,11 @@ export function linkWhatsApp(telefone, texto = '') {
 
 /* ---------------- mensagens ---------------- */
 
+export const ORIGENS_CLIENTE = {
+  indicacao: 'Indicação', instagram: 'Instagram', facebook: 'Facebook', google: 'Google', whatsapp: 'WhatsApp',
+  passou_na_frente: 'Passou na frente', cliente_antiga: 'Já era cliente', outro: 'Outro',
+};
+
 export const MODELOS_MENSAGEM = {
   recebimento: 'Confirmação de recebimento',
   orcamento: 'Envio de orçamento',

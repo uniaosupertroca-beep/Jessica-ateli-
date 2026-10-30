@@ -90,19 +90,24 @@ rotasRelatorios.get('/relatorios', async c => {
   const uo = sqlUnidades('o.unit_id', unidades);
   const um = sqlUnidades('m.unit_id', unidades);
   const us = sqlUnidades('sm.unit_id', unidades);
+  // Filtros opcionais: profissional (peças atribuídas a ela) e categoria do serviço.
+  const prof = c.req.query('profissional') || '';
+  const cat = c.req.query('categoria') || '';
+  const fServ = `${prof ? ' AND i.responsavel_id = ?' : ''}${cat ? ' AND sc.categoria_id = ?' : ''}`;
+  const bServ = [...(prof ? [prof] : []), ...(cat ? [cat] : [])];
   const n = diasEntre(de, ate);
   const antDe = somarDias(de, -n);
   const antAte = somarDias(de, -1);
   const cfg = await lerConfigAtelie(db);
   const all = <T = Record<string, unknown>>(sql: string, ...b: unknown[]) => db.prepare(sql).bind(...b).all<T>().then(r => r.results);
   const inicio12 = (() => { const [a, m] = h.split('-').map(Number); const d = new Date(Date.UTC(a, m - 12, 1)); return d.toISOString().slice(0, 10); })();
-  const [atual, anterior, servicos, clientes, recorrentes, atrasos, produtividade, materiais, formas, mensal, despesasCat] = await Promise.all([
+  const [atual, anterior, servicos, clientes, recorrentes, atrasos, produtividade, materiais, formas, mensal, despesasCat, situacao, origens, filtros] = await Promise.all([
     indicadores(db, de, ate, unidades),
     indicadores(db, antDe, antAte, unidades),
     all(`SELECT COALESCE(sc.nome, s.descricao) AS servico, COUNT(*) AS vezes, SUM(s.quantidade) AS quantidade, SUM(s.subtotal_centavos) AS receita,
            SUM(s.tempo_min) AS tempo_min, ROUND(AVG(i.tempo_real_min)) AS tempo_real_medio
          FROM order_item_services s JOIN order_items i ON i.id = s.item_id JOIN orders o ON o.id = i.order_id LEFT JOIN service_catalog sc ON sc.id = s.service_id
-         WHERE o.status = 'entregue' AND ${uo} AND ${DIA_SP('o.entregue_em')} BETWEEN ? AND ? GROUP BY 1 ORDER BY vezes DESC, receita DESC LIMIT 30`, de, ate),
+         WHERE o.status = 'entregue' AND ${uo} AND ${DIA_SP('o.entregue_em')} BETWEEN ? AND ?${fServ} GROUP BY 1 ORDER BY vezes DESC, receita DESC LIMIT 30`, de, ate, ...bServ),
     all(`SELECT c.id, c.nome, COUNT(*) AS os, SUM(t.total) AS total FROM orders o JOIN clients c ON c.id = o.client_id JOIN vw_order_totals t ON t.order_id = o.id
          WHERE o.status = 'entregue' AND ${uo} AND ${DIA_SP('o.entregue_em')} BETWEEN ? AND ? GROUP BY c.id ORDER BY total DESC LIMIT 15`, de, ate),
     db.prepare(`SELECT COUNT(*) AS recorrentes, (SELECT COUNT(DISTINCT o.client_id) FROM orders o WHERE o.status <> 'cancelada' AND ${uo} AND o.aberta_em BETWEEN ?1 AND ?2) AS atendidas
@@ -117,7 +122,8 @@ rotasRelatorios.get('/relatorios', async c => {
            COALESCE(SUM((SELECT COALESCE(SUM(s.tempo_min), 0) FROM order_item_services s WHERE s.item_id = i.id)), 0) AS tempo_previsto,
            COALESCE(SUM(i.retrabalhos), 0) AS retrabalhos
          FROM users u JOIN order_items i ON i.responsavel_id = u.id JOIN orders o ON o.id = i.order_id
-         WHERE ${uo} AND i.status_producao = 'finalizado' AND ${DIA_SP('i.finalizado_em')} BETWEEN ? AND ? GROUP BY u.id ORDER BY pecas DESC`, de, ate),
+         WHERE ${uo} AND i.status_producao = 'finalizado' AND ${DIA_SP('i.finalizado_em')} BETWEEN ? AND ?${prof ? ' AND u.id = ?' : ''}
+         GROUP BY u.id ORDER BY pecas DESC`, de, ate, ...(prof ? [prof] : [])),
     all(`SELECT m.nome, m.unidade, ROUND(SUM(-sm.quantidade), 3) AS qtd_consumida, ROUND(SUM(-sm.quantidade * sm.custo_unitario_centavos)) AS custo
          FROM stock_movements sm JOIN materials m ON m.id = sm.material_id
          WHERE sm.order_id IS NOT NULL AND ${us} AND sm.tipo IN ('consumo','reversao') AND ${DIA_SP('sm.criado_em')} BETWEEN ? AND ?
@@ -137,6 +143,15 @@ rotasRelatorios.get('/relatorios', async c => {
     all(`SELECT fc.nome, SUM(CASE WHEN m.tipo = 'saida' THEN m.valor_centavos ELSE -m.valor_centavos END) AS valor
          FROM cash_movements m JOIN finance_categories fc ON fc.id = m.categoria_id
          WHERE m.data BETWEEN ? AND ? AND ${um} AND fc.tipo = 'saida' AND m.categoria_id NOT IN ('fc-sangria','fc-devolucao') GROUP BY fc.id HAVING valor <> 0 ORDER BY valor DESC`, de, ate),
+    // Situação atual das OS abertas no período (recebida, em produção, pronta...).
+    all(`SELECT o.status, COUNT(*) AS n FROM orders o WHERE ${uo} AND ${DIA_SP('o.aberta_em')} BETWEEN ? AND ? GROUP BY o.status ORDER BY n DESC`, de, ate),
+    // Como as clientes atendidas no período conheceram o ateliê.
+    all(`SELECT COALESCE(c.origem, 'nao_informado') AS origem, COUNT(DISTINCT c.id) AS n FROM clients c JOIN orders o ON o.client_id = c.id
+         WHERE ${uo} AND o.status <> 'cancelada' AND ${DIA_SP('o.aberta_em')} BETWEEN ? AND ? GROUP BY 1 ORDER BY n DESC`, de, ate),
+    Promise.all([
+      all("SELECT id, nome FROM users WHERE ativo = 1 AND (papel = 'costureira' OR capacidade_min_dia > 0) ORDER BY nome"),
+      all('SELECT id, nome FROM service_categories WHERE ativo = 1 ORDER BY nome'),
+    ]).then(([profissionais, categorias]) => ({ profissionais, categorias })),
   ]);
   // Margem estimada por serviço: receita − mão de obra estimada (tempo × custo da hora).
   const margem = (servicos as Array<{ receita: number; tempo_min: number }>).map(s => ({
@@ -151,6 +166,7 @@ rotasRelatorios.get('/relatorios', async c => {
   }
   return c.json({
     de, ate, por_unidade: porUnidade, periodo_anterior: { de: antDe, ate: antAte }, atual, anterior,
+    filtro: { profissional: prof, categoria: cat }, filtros, situacao, origens,
     servicos: margem, clientes, recorrencia: recorrentes, atrasos, produtividade, materiais, formas, mensal, despesas_categoria: despesasCat,
     custo_hora_centavos: cfg.custo_hora_centavos,
   });

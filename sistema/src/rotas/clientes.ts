@@ -27,6 +27,7 @@ const zCliente = z.object({
   endereco: z.string().trim().max(300).optional().nullable(),
   observacoes: z.string().trim().max(2000).default(''),
   preferencias: z.string().trim().max(2000).default(''),
+  origem: z.union([z.literal(''), z.enum(['indicacao', 'instagram', 'facebook', 'google', 'whatsapp', 'passou_na_frente', 'cliente_antiga', 'outro'])]).optional().nullable(),
   confirmar_duplicado: z.boolean().optional(),
 });
 
@@ -86,9 +87,9 @@ rotasClientes.post('/', async c => {
   const id = uuid();
   await c.env.DB.batch([
     c.env.DB.prepare(`INSERT INTO clients (id, nome, nome_busca, telefone, whatsapp, email, nascimento, endereco, observacoes, preferencias,
-        criado_em, criado_por) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
+        criado_em, criado_por, origem) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .bind(id, d.nome, nomeBusca, d.telefone, d.whatsapp, d.email || null, d.nascimento || null, d.endereco || null,
-        d.observacoes, d.preferencias, agora(), c.get('usuario').id),
+        d.observacoes, d.preferencias, agora(), c.get('usuario').id, d.origem || null),
     auditoria(c, 'criar', 'clients', id, { nome: d.nome }),
   ]);
   return c.json({ id }, 201);
@@ -106,9 +107,9 @@ rotasClientes.put('/:id', async c => {
   }
   const [r] = await c.env.DB.batch([
     c.env.DB.prepare(`UPDATE clients SET nome=?, nome_busca=?, telefone=?, whatsapp=?, email=?, nascimento=?, endereco=?, observacoes=?,
-        preferencias=?, ativo=?, atualizado_em=? WHERE id = ?`)
+        preferencias=?, ativo=?, atualizado_em=?, origem=? WHERE id = ?`)
       .bind(d.nome, nomeBusca, d.telefone, d.whatsapp, d.email || null, d.nascimento || null, d.endereco || null, d.observacoes,
-        d.preferencias, d.ativo ? 1 : 0, agora(), id),
+        d.preferencias, d.ativo ? 1 : 0, agora(), d.origem || null, id),
     auditoria(c, 'editar', 'clients', id, { nome: d.nome }),
   ]);
   if (!r.meta.changes) throw naoEncontrado('Cliente');

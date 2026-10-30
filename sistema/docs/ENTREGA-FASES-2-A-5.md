@@ -141,3 +141,20 @@ Migration `0006_unidades.sql` (não destrutiva: tudo o que já existia passa a s
 - **Backup/restauração:** incluem `units` e `user_units`; o script de restauração usa a versão mais recente de cada trava.
 
 Premissas adotadas (podem ser mudadas): filiais próprias (não franquias), cada filial costura as próprias peças, mesmos preços em todas, numeração de OS única.
+
+## Revisão contra o "Prompt Master" (30/10/2026)
+
+Conferido módulo a módulo. O que faltava foi implementado na migration `0007_aceite_permissoes_origem.sql` (só acrescenta colunas e tabela):
+
+| Item do pedido | O que foi feito |
+|---|---|
+| Permissões personalizáveis (Módulo 14) | **Equipe → Permissões**: cada pessoa parte do perfil e a administradora marca/desmarca o que quiser. Configurações, equipe e backups ficam só com o administrador (evita escalada de acesso). Vale no próximo clique da pessoa e é verificado no servidor. |
+| Aceite do orçamento (Módulo 5) | Ao aprovar: como a cliente aprovou (pessoalmente, WhatsApp, telefone), data/hora e quem registrou. Aparece na OS e no orçamento impresso. |
+| Confirmação de entrega (Módulo 5) | Ao entregar: quem retirou (a cliente ou outra pessoa), data/hora e quem entregou. Sai no comprovante de retirada. |
+| Cancelamento — Cenário H | Exige estornar pagamentos antes; desmarca provas/entregas da agenda; opção de devolver ao estoque os materiais lançados; some do quadro de produção; não entra em faturamento nem "a receber"; histórico mantido. |
+| Origem da cliente (Módulo 2) | Campo "Como conheceu o ateliê" e quadro nos Relatórios. |
+| Relatórios filtráveis (Módulo 12) | Filtros por profissional e categoria de serviço; quadro "OS por situação". |
+
+Testes: `test/aceite-permissoes.test.ts` (cenário H completo, permissões, aceite/entrega, origem e filtros). Total: **72 testes passando**.
+
+**QR Code (Módulo 9 / Cenário F):** continua desligado, porque a Jessica pediu para tirar. A identificação das peças é pela etiqueta com nome da cliente, peça, OS e código, e a busca é por nome e peça. Se quiser o QR de volta, ele pode voltar como opção nas Configurações.

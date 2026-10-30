@@ -5,6 +5,8 @@ import { hashSenha, validarSenhaNova } from '../lib/auth';
 import { auditoria } from '../lib/auditoria';
 import { ErroApp, naoEncontrado } from '../lib/erros';
 import { agora, exigir, lerCorpo, uuid } from '../lib/util';
+import { AJUSTAVEIS, permissoesDo, permissoesEfetivas, ROTULOS } from '../lib/permissoes';
+import type { Papel } from '../env';
 
 export const rotasUsuarios = new Hono<AppEnv>();
 
@@ -101,4 +103,39 @@ rotasUsuarios.patch('/:id', async c => {
   if (d.ativo === false || d.papel || d.senha) stmts.push(c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id));
   await c.env.DB.batch(stmts);
   return c.json({ ok: true });
+});
+
+/* ---------- permissões por pessoa (perfil + ajustes) ---------- */
+rotasUsuarios.get('/:id/permissoes', async c => {
+  exigir(c, 'usuarios.gerenciar');
+  const u = await c.env.DB.prepare('SELECT id, papel FROM users WHERE id = ?').bind(c.req.param('id')).first<{ id: string; papel: Papel }>();
+  if (!u) throw naoEncontrado('Pessoa');
+  const ajustes = (await c.env.DB.prepare('SELECT permissao, concedida FROM user_permissions WHERE user_id = ?').bind(u.id).all<{ permissao: string; concedida: number }>()).results;
+  const efetivas = permissoesEfetivas(u.papel, ajustes);
+  const perfil = permissoesDo(u.papel);
+  return c.json({
+    papel: u.papel,
+    permissoes: AJUSTAVEIS.map(p => ({ id: p, nome: ROTULOS[p], ativa: efetivas.has(p), do_perfil: perfil.has(p) })),
+  });
+});
+
+rotasUsuarios.put('/:id/permissoes', async c => {
+  exigir(c, 'usuarios.gerenciar');
+  const id = c.req.param('id');
+  const { permissoes } = await lerCorpo(c, z.object({ permissoes: z.array(z.string().max(60)).max(100) }));
+  const u = await c.env.DB.prepare('SELECT papel FROM users WHERE id = ?').bind(id).first<{ papel: Papel }>();
+  if (!u) throw naoEncontrado('Pessoa');
+  if (u.papel === 'admin') throw new ErroApp(422, 'admin_tem_tudo', 'O administrador já tem todas as permissões.');
+  const validas = new Set<string>(AJUSTAVEIS);
+  if (permissoes.some(p => !validas.has(p))) throw new ErroApp(422, 'permissao_invalida', 'Permissão inválida.');
+  const quer = new Set(permissoes);
+  const perfil = permissoesDo(u.papel);
+  // Grava só as diferenças em relação ao perfil: se o perfil mudar, os ajustes continuam valendo.
+  const ajustes = AJUSTAVEIS.filter(p => quer.has(p) !== perfil.has(p)).map(p => ({ p, v: quer.has(p) ? 1 : 0 }));
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM user_permissions WHERE user_id = ?').bind(id),
+    ...ajustes.map(a => c.env.DB.prepare('INSERT INTO user_permissions (user_id, permissao, concedida) VALUES (?,?,?)').bind(id, a.p, a.v)),
+    auditoria(c, 'permissoes', 'users', id, { ajustes }),
+  ]);
+  return c.json({ ok: true, ajustes: ajustes.length });
 });

@@ -230,6 +230,8 @@ function painelStatus(ctx) {
     : FLUXO_OS.map((s, i) => `<span class="${i === idx ? 'on' : i < idx ? 'done' : ''}">${STATUS_OS[s]}</span>`).join('<span style="background:none;padding:0">›</span>');
   return `<div class="panel nao-imprimir"><div class="flow">${fluxo}</div>
     ${f.status === 'aprovada' || f.status === 'em_producao' ? '<p class="ajuda" style="margin:0">A situação avança sozinha conforme a produção de cada peça é atualizada.</p>' : ''}
+    ${os.aprovada_em ? `<p class="ajuda" style="margin:0">Orçamento aprovado ${({ presencial: 'pessoalmente', whatsapp: 'pelo WhatsApp', telefone: 'por telefone', outro: '' })[os.aprovacao_meio] || ''} em ${dataHora(os.aprovada_em)}${os.aprovada_por_nome ? `, registrado por ${esc(os.aprovada_por_nome)}` : ''}.</p>` : ''}
+    ${os.entregue_em ? `<p class="ajuda" style="margin:0">Entregue em ${dataHora(os.entregue_em)}${os.retirado_por_nome ? ` · retirado por <b>${esc(os.retirado_por_nome)}</b>` : ''}${os.entregue_por_nome ? ` · entregue por ${esc(os.entregue_por_nome)}` : ''}.</p>` : ''}
     ${os.motivo && ['cancelada', 'pausada'].includes(f.status) ? `<div class="alert ${f.status === 'cancelada' ? 'a-crit' : 'a-warn'}">Motivo: ${esc(os.motivo)}</div>` : ''}
     <div class="row">${trans.map(t => `<button class="btn sm ${t === 'cancelada' ? 'danger' : t === 'entregue' || t === 'aprovada' ? 'pri' : t === 'pausada' || t === 'retomar' ? 'sec' : ''}" data-a="status" data-st="${t}">${rot[t] || STATUS_OS[t]}</button>`).join('')}
       ${sessao.pode('whatsapp.usar') ? blocoWhatsApp(ctx) : ''}</div></div>`;
@@ -627,17 +629,44 @@ async function mudarStatus(ctx, para) {
     return modal({
       title: `${verbo[0].toUpperCase() + verbo.slice(1)} ${nOS(f.numero)}`,
       body: `${para === 'cancelada' && os.pago > 0 ? `<div class="alert a-warn" style="margin-bottom:10px">Esta OS tem ${brl(os.pago)} em pagamentos. Estorne-os antes de cancelar.</div>` : ''}
-        <div class="field"><label class="req" for="m-mot">Motivo</label><textarea class="in" id="m-mot" placeholder="${para === 'cancelada' ? 'Ex.: cliente desistiu' : 'Ex.: aguardando tecido da cliente'}"></textarea></div>`,
+        <div class="field"><label class="req" for="m-mot">Motivo</label><textarea class="in" id="m-mot" placeholder="${para === 'cancelada' ? 'Ex.: cliente desistiu' : 'Ex.: aguardando tecido da cliente'}"></textarea></div>
+        ${para === 'cancelada' ? `${(os.materiais || []).some(x => x.tipo === 'consumo' && !x.revertido_por) ? '<label class="chk"><input type="checkbox" id="m-dev" checked> Devolver ao estoque os materiais lançados nesta OS</label>' : ''}
+          <p class="ajuda" style="margin:6px 0 0">Provas e entregas ainda marcadas para esta OS serão desmarcadas da agenda. O histórico da OS é mantido.</p>` : ''}`,
       actions: [{ label: 'Voltar' }, { label: verbo === 'cancelar' ? 'Cancelar OS' : 'Pausar', cls: para === 'cancelada' ? 'danger-solid' : 'pri', fn: async m => {
         corpo.motivo = $('#m-mot', m).value.trim();
+        if ($('#m-dev', m)?.checked) corpo.devolver_materiais = true;
         if (!corpo.motivo) { toast('Informe o motivo.', true); return false; }
         return enviarStatus(ctx, corpo);
       } }],
     });
   }
-  if (para === 'entregue' && os.saldo > 0) {
-    if (!(await confirmar('Entregar com saldo pendente?', `Ainda faltam <b>${brl(os.saldo)}</b>. A OS continua em "A receber" até ser paga. Prefere registrar o pagamento antes?`, 'Entregar mesmo assim'))) return;
-    corpo.confirmar_saldo_pendente = true;
+  if (para === 'aprovada' && ['recebida', 'aguardando_aprovacao'].includes(f.status)) {
+    // Aceite do orçamento: fica registrado como a cliente aprovou, quando e por quem foi anotado.
+    return modal({
+      title: `Aprovar orçamento · ${nOS(f.numero)}`,
+      body: `${os.total !== undefined ? `<p style="margin:0 0 10px">Valor do orçamento: <b class="num">${brl(os.total)}</b></p>` : ''}
+        <div class="field"><label for="m-meio">Como a cliente aprovou?</label><select class="in" id="m-meio">
+          <option value="presencial">Pessoalmente, no ateliê</option><option value="whatsapp">Pelo WhatsApp</option><option value="telefone">Por telefone</option><option value="outro">Outro</option></select></div>
+        <p class="ajuda" style="margin:0">Fica registrado com data, hora e o seu nome. Depois de aprovada, a OS segue para a produção.</p>`,
+      actions: [{ label: 'Voltar' }, { label: 'Registrar aprovação', cls: 'pri', fn: async m => {
+        corpo.aprovacao_meio = $('#m-meio', m).value;
+        return enviarStatus(ctx, corpo);
+      } }],
+    });
+  }
+  if (para === 'entregue') {
+    // Confirmação de entrega: quem levou as peças (a própria cliente ou outra pessoa).
+    return modal({
+      title: `Registrar entrega · ${nOS(f.numero)}`,
+      body: `${os.saldo > 0 ? `<div class="alert a-warn" style="margin-bottom:10px">Ainda faltam <b>${brl(os.saldo)}</b>. A OS continua em "A receber" até ser paga. Se preferir, volte e registre o pagamento antes.</div>` : ''}
+        <div class="field"><label for="m-ret">Quem retirou as peças</label><input class="in" id="m-ret" value="${esc(os.cliente?.nome || '')}"></div>
+        <p class="ajuda" style="margin:0">Data, hora e quem entregou ficam registrados e saem no comprovante de retirada.</p>`,
+      actions: [{ label: 'Voltar' }, { label: os.saldo > 0 ? 'Entregar mesmo assim' : 'Confirmar entrega', cls: 'pri', fn: async m => {
+        corpo.retirado_por = $('#m-ret', m).value.trim();
+        if (os.saldo > 0) corpo.confirmar_saldo_pendente = true;
+        return enviarStatus(ctx, corpo);
+      } }],
+    });
   }
   return enviarStatus(ctx, corpo);
 }
@@ -872,7 +901,8 @@ export async function telaImpressao(el, params) {
       orcamento: () => `${tabela}<div style="display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap"><div style="flex:1;min-width:200px">
           <p>Válido até <b>${dataBR(somarDias(sessao.hoje, atelie.doc_validade_orcamento_dias || 7))}</b>. Prazo estimado de entrega: <b>${dataBR(os.prazo)}</b>.</p>
           ${atelie.doc_termos_orcamento ? `<p style="white-space:pre-line">${esc(atelie.doc_termos_orcamento)}</p>` : ''}
-          ${os.observacoes ? `<p><b>Observações:</b> ${esc(os.observacoes)}</p>` : ''}</div>${totais}</div>`,
+          ${os.observacoes ? `<p><b>Observações:</b> ${esc(os.observacoes)}</p>` : ''}
+          ${os.aprovada_em ? `<div class="box"><b>Orçamento aprovado</b> ${({ presencial: 'pessoalmente', whatsapp: 'pelo WhatsApp', telefone: 'por telefone', outro: '' })[os.aprovacao_meio] || ''} em ${dataHora(os.aprovada_em)}${os.aprovada_por_nome ? ` · registrado por ${esc(os.aprovada_por_nome)}` : ''}.</div>` : ''}</div>${totais}</div>`,
       producao: () => `${tabela}${os.observacoes ? `<div class="box"><b>Observações da OS:</b> ${esc(os.observacoes)}</div>` : ''}
         ${os.compromissos?.filter(c => c.tipo === 'prova' && c.status === 'agendado').length ? `<div class="box"><b>Provas agendadas:</b> ${os.compromissos.filter(c => c.tipo === 'prova' && c.status === 'agendado').map(c => `${dataBR(c.dia)}${c.hora_inicio ? ' ' + esc(c.hora_inicio) : ''}`).join(', ')}</div>` : ''}
         ${fichas.map(f => { const v = f.versoes[0]; const cps = camposMedida.filter(c => v.valores[c.id] !== undefined);
@@ -881,7 +911,8 @@ export async function telaImpressao(el, params) {
           ${pagos.map(p => `<tr><td>${dataBR(p.data)}</td><td>${esc(p.descricao)}</td><td>${esc(p.forma)}</td><td class="r num">${brl(p.valor_centavos)}</td></tr>`).join('') || '<tr><td colspan="4">Nenhum pagamento.</td></tr>'}</tbody></table>
         <div style="display:flex;justify-content:flex-end">${totais}</div>
         <p>Recebemos de <b>${esc(os.cliente.nome)}</b> o valor de <b>${brl(os.pago)}</b> referente à ${nOS(os.numero)}.</p>`,
-      retirada: () => `<p style="white-space:pre-line">${esc(atelie.doc_texto_retirada || 'Declaro que retirei as peças abaixo.')} Referente à ${nOS(os.numero)}${os.entregue_em ? `, em ${dataBR(os.entregue_em.slice(0, 10))}` : ''}.</p>
+      retirada: () => `<p style="white-space:pre-line">${esc(atelie.doc_texto_retirada || 'Declaro que retirei as peças abaixo.')} Referente à ${nOS(os.numero)}${os.entregue_em ? `, em ${dataHora(os.entregue_em)}` : ''}.</p>
+        ${os.retirado_por_nome ? `<div class="box"><b>Retirado por:</b> ${esc(os.retirado_por_nome)}${os.entregue_por_nome ? ` &nbsp;·&nbsp; <b>Entregue por:</b> ${esc(os.entregue_por_nome)}` : ''}</div>` : ''}
         <table><thead><tr><th>Código</th><th>Peça</th><th>Serviços</th></tr></thead><tbody>${os.itens.map(i => `<tr><td class="num">${esc(i.codigo)}</td><td>${esc(i.peca)}</td>
           <td>${i.servicos.map(s => esc(s.descricao)).join(', ')}</td></tr>`).join('')}</tbody></table>
         ${verValores ? `<p>${os.saldo > 0 ? `<b>Saldo pendente na retirada: ${brl(os.saldo)}</b>` : 'Serviço totalmente pago.'}</p>` : ''}`,

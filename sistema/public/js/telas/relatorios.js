@@ -1,10 +1,10 @@
 import { api, sessao } from '../api.js';
 import { $, brl, dataBR, esc } from '../ui.js';
-import { duracao, paraCSV, somarDias } from '../regras.js';
+import { duracao, ORIGENS_CLIENTE, paraCSV, somarDias, STATUS_OS } from '../regras.js';
 import { barrasH, linhas } from '../graficos.js';
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-const est = { de: null, ate: null };
+const est = { de: null, ate: null, profissional: '', categoria: '' };
 const brlCurto = c => {
   const v = c / 100;
   return Math.abs(v) >= 1000 ? `R$ ${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : brl(c).replace(',00', '');
@@ -14,7 +14,7 @@ export async function telaRelatorios(el, _p, vivo) {
   const hoje = sessao.hoje;
   est.de ??= `${hoje.slice(0, 7)}-01`;
   est.ate ??= hoje;
-  const r = await api(`/relatorios?de=${est.de}&ate=${est.ate}`);
+  const r = await api(`/relatorios?${new URLSearchParams({ de: est.de, ate: est.ate, ...(est.profissional && { profissional: est.profissional }), ...(est.categoria && { categoria: est.categoria }) })}`);
   if (!vivo()) return;
   const a = r.atual;
   const b = r.anterior;
@@ -30,7 +30,10 @@ export async function telaRelatorios(el, _p, vivo) {
       <div class="row nao-imprimir"><button class="btn" data-csv>Exportar CSV</button><button class="btn" data-imprimir>Imprimir</button></div></div>
     <div class="panel nao-imprimir"><div class="row">${presets.map(([k, l, de, ate]) => `<button class="btn sm ${est.de === de && est.ate === ate ? 'sec' : 'ghost'}" data-de="${de}" data-ate="${ate}">${l}</button>`).join('')}
       <label class="row" style="gap:6px">De <input class="in" type="date" id="r-de" value="${est.de}" style="width:auto"></label>
-      <label class="row" style="gap:6px">até <input class="in" type="date" id="r-ate" value="${est.ate}" max="${hoje}" style="width:auto"></label></div></div>
+      <label class="row" style="gap:6px">até <input class="in" type="date" id="r-ate" value="${est.ate}" max="${hoje}" style="width:auto"></label>
+      <select class="in" id="r-prof" style="width:auto" aria-label="Profissional"><option value="">Todas as profissionais</option>${r.filtros.profissionais.map(p => `<option value="${esc(p.id)}" ${est.profissional === p.id ? 'selected' : ''}>${esc(p.nome)}</option>`).join('')}</select>
+      <select class="in" id="r-cat" style="width:auto" aria-label="Categoria de serviço"><option value="">Todas as categorias</option>${r.filtros.categorias.map(p => `<option value="${esc(p.id)}" ${est.categoria === p.id ? 'selected' : ''}>${esc(p.nome)}</option>`).join('')}</select></div>
+      ${est.profissional || est.categoria ? '<p class="ajuda" style="margin:0">Profissional e categoria filtram "Serviços mais realizados" e "Produtividade". Os indicadores financeiros acima são do ateliê todo.</p>' : ''}</div>
     <div class="grid g4">
       ${card('Faturamento', brl(a.faturamento), `${a.os_entregues} OS entregues · ${varia(a.faturamento, b.faturamento) || 'sem comparação'}`)}
       ${card('Recebido', brl(a.recebido), varia(a.recebido, b.recebido) || 'pagamentos de clientes', 'var(--ok)')}
@@ -61,6 +64,12 @@ export async function telaRelatorios(el, _p, vivo) {
       ${r.servicos.map(s => `<tr><td>${esc(s.servico)}</td><td class="r num">${s.vezes}</td><td class="r num">${brl(s.receita)}</td><td class="r num">${s.tempo_min ? duracao(s.tempo_min) : '—'}</td>
         <td class="r num">${s.tempo_real_medio ? duracao(s.tempo_real_medio) : '—'}</td>${r.custo_hora_centavos ? `<td class="r num">${brl(s.mao_obra)}</td><td class="r num">${brl(s.margem)}</td>` : ''}</tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">Nenhuma OS entregue no período.</div>'}</div>
+    <div class="grid g2">
+      <div class="panel"><h2>OS abertas no período, por situação</h2>${r.situacao.length ? `<div class="tw"><table><thead><tr><th>Situação</th><th class="r">OS</th></tr></thead><tbody>
+        ${r.situacao.map(x => `<tr><td>${esc(STATUS_OS[x.status] || x.status)}</td><td class="r num">${x.n}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Nenhuma OS aberta no período.</div>'}</div>
+      <div class="panel"><h2>Como as clientes conheceram o ateliê</h2>${r.origens.length ? `<div class="tw"><table><thead><tr><th>Origem</th><th class="r">Clientes</th></tr></thead><tbody>
+        ${r.origens.map(x => `<tr><td>${esc(ORIGENS_CLIENTE[x.origem] || 'Não informado')}</td><td class="r num">${x.n}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sem clientes atendidas no período.</div>'}</div>
+    </div>
     <div class="grid g2">
       <div class="panel"><h2>Produtividade da equipe</h2>${r.produtividade.length ? `<div class="tw"><table><thead><tr><th>Profissional</th><th class="r">Peças</th><th class="r">Tempo real</th><th class="r">Previsto</th><th class="r">Retrabalhos</th></tr></thead><tbody>
         ${r.produtividade.map(p => `<tr><td>${esc(p.nome)}</td><td class="r num">${p.pecas}</td><td class="r num">${duracao(p.tempo_real)}</td><td class="r num">${duracao(p.tempo_previsto)}</td><td class="r num">${p.retrabalhos}</td></tr>`).join('')}</tbody></table></div>
@@ -96,7 +105,9 @@ export async function telaRelatorios(el, _p, vivo) {
   el.onchange = e => {
     if (e.target.id === 'r-de' && e.target.value) est.de = e.target.value;
     if (e.target.id === 'r-ate' && e.target.value) est.ate = e.target.value;
-    if (e.target.id === 'r-de' || e.target.id === 'r-ate') telaRelatorios(el, _p, vivo);
+    if (e.target.id === 'r-prof') est.profissional = e.target.value;
+    if (e.target.id === 'r-cat') est.categoria = e.target.value;
+    if (['r-de', 'r-ate', 'r-prof', 'r-cat'].includes(e.target.id)) telaRelatorios(el, _p, vivo);
   };
 }
 
