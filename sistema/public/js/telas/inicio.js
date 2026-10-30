@@ -64,7 +64,7 @@ export async function telaInicio(el) {
   el.innerHTML = `
     ${avisoInicio()}
     <div class="head"><div><h1>${semana}, ${dia} de ${MESES[m - 1]} de ${a}</h1><p>Olá, ${esc(sessao.eu.nome.split(' ')[0])}. Resumo do ateliê hoje.</p></div></div>
-    <div class="row">${atalhos}</div>
+    <div class="row atalhos">${atalhos}</div>
     ${avisos}
     <div class="grid g4">
       ${cartao('Entregas hoje', `${k.entregas_hoje ?? 0}<span class="muted" style="font-size:1rem">/${d.capacidade}</span>`, `${k.abertas ?? 0} OS em aberto`, 'entrega')}
