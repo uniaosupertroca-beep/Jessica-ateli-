@@ -1,0 +1,87 @@
+{
+  "completo": [
+    {
+      "id": "c01-abertura",
+      "titulo": "ATELIÊ JESSICA",
+      "sub": "Tecnologia e praticidade para o seu negócio.",
+      "texto": "Imagine ter todo o controle do seu ateliê em um único lugar. Conheça o Ateliê Jessica, um sistema desenvolvido para transformar a maneira de organizar clientes, serviços, encomendas e resultados."
+    },
+    {
+      "id": "c02-dashboard",
+      "titulo": "Tudo que você precisa, em um só lugar.",
+      "texto": "Logo na tela inicial, você acompanha as principais informações do negócio, visualiza as entregas, identifica serviços atrasados e consulta os resultados financeiros. Tudo de forma simples e organizada."
+    },
+    {
+      "id": "c03-clientes",
+      "titulo": "Clientes organizadas. Atendimento personalizado.",
+      "texto": "Cada cliente possui um cadastro completo, com o histórico dos serviços, informações importantes e fichas de medidas. Isso facilita novos atendimentos e permite acompanhar cada encomenda com muito mais precisão."
+    },
+    {
+      "id": "c04-ordem",
+      "titulo": "Controle completo, da entrada à entrega.",
+      "texto": "Com as ordens de serviço, você registra todas as peças recebidas, os ajustes solicitados, os valores e os prazos. Uma mesma ordem pode reunir várias roupas, cada uma com as suas informações, fotografias e acompanhamento individual."
+    },
+    {
+      "id": "c05-producao",
+      "titulo": "Mais organização. Menos atrasos.",
+      "texto": "O aplicativo também organiza toda a produção. Você acompanha o andamento das peças, distribui os trabalhos entre as costureiras e controla a agenda de provas, compromissos e entregas."
+    },
+    {
+      "id": "c06-estoque",
+      "titulo": "Controle de materiais e precificação.",
+      "texto": "Tenha também controle sobre os materiais utilizados, acompanhe o estoque de tecidos e aviamentos e organize os preços dos serviços. Tudo integrado, para facilitar a gestão e ajudar nas decisões do dia a dia."
+    },
+    {
+      "id": "c07-financeiro",
+      "titulo": "Mais controle sobre os resultados.",
+      "texto": "Na gestão financeira, é possível acompanhar recebimentos, pagamentos, despesas e valores pendentes. Os relatórios e gráficos ajudam a entender o desempenho do ateliê e a tomar decisões com mais segurança."
+    },
+    {
+      "id": "c08-whatsapp",
+      "titulo": "Comunicação e documentos com a sua marca.",
+      "texto": "A comunicação com as clientes também fica mais prática. Você pode preparar avisos pelo WhatsApp, gerar comprovantes e personalizar os documentos com a identidade do seu ateliê."
+    },
+    {
+      "id": "c09-evolucao",
+      "titulo": "Um sistema que evolui com o seu ateliê.",
+      "texto": "E o melhor: o aplicativo funciona no computador e no celular, e pode continuar evoluindo. Novas ferramentas, módulos e personalizações podem ser desenvolvidos conforme as necessidades e o crescimento do negócio."
+    },
+    {
+      "id": "c10-encerramento",
+      "titulo": "ATELIÊ JESSICA",
+      "sub": "Gestão inteligente para costura.",
+      "texto": "Ateliê Jessica. Mais organização, praticidade e tecnologia, para você dedicar mais tempo ao que realmente importa."
+    }
+  ],
+  "curto": [
+    {
+      "id": "v01",
+      "texto": "Seu ateliê merece muito mais organização e praticidade."
+    },
+    {
+      "id": "v02",
+      "texto": "Com o Ateliê Jessica, você controla clientes, roupas, serviços, valores e prazos em um único aplicativo.",
+      "titulo": "Clientes, roupas e prazos"
+    },
+    {
+      "id": "v03",
+      "texto": "Acompanhe cada etapa da produção, organize as costureiras e mantenha as entregas e provas sempre sob controle.",
+      "titulo": "Produção e agenda"
+    },
+    {
+      "id": "v04",
+      "texto": "Gerencie os seus materiais, acompanhe os pagamentos e tenha uma visão clara dos resultados do seu negócio.",
+      "titulo": "Estoque, pagamentos e resultados"
+    },
+    {
+      "id": "v05",
+      "texto": "Facilite a comunicação com as clientes e acesse o seu sistema pelo celular ou pelo computador.",
+      "titulo": "WhatsApp, documentos e celular"
+    },
+    {
+      "id": "v06",
+      "texto": "Ateliê Jessica. Uma solução personalizada, que evolui junto com o seu negócio.",
+      "sub": "Seu ateliê, mais organizado e profissional."
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+# conta da demonstração local e dados intermediários
+.demo-senha
+.demo-historico.json
+# trilha é regenerada em segundos por scripts/trilha.py (sempre igual)
+trilha/*.wav

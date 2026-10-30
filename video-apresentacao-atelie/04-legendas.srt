@@ -1,0 +1,187 @@
+1
+00:00:01,400 --> 00:00:05,113
+Imagine ter todo o controle do
+seu ateliê em um único lugar.
+
+2
+00:00:05,163 --> 00:00:06,689
+Conheça o Ateliê Jessica
+
+3
+00:00:06,739 --> 00:00:10,706
+um sistema desenvolvido para transformar
+a maneira de organizar clientes
+
+4
+00:00:10,756 --> 00:00:13,147
+serviços, encomendas e resultados.
+
+5
+00:00:14,700 --> 00:00:18,902
+Logo na tela inicial, você acompanha
+as principais informações do negócio
+
+6
+00:00:18,952 --> 00:00:20,391
+visualiza as entregas
+
+7
+00:00:20,441 --> 00:00:24,696
+identifica serviços atrasados e
+consulta os resultados financeiros.
+
+8
+00:00:24,746 --> 00:00:27,301
+Tudo de forma simples e organizada.
+
+9
+00:00:32,667 --> 00:00:36,829
+Cada cliente possui um cadastro
+completo, com o histórico dos serviços
+
+10
+00:00:36,879 --> 00:00:40,002
+informações importantes
+e fichas de medidas.
+
+11
+00:00:40,052 --> 00:00:42,901
+Isso facilita novos atendimentos
+e permite acompanhar
+
+12
+00:00:42,951 --> 00:00:45,801
+cada encomenda com muito mais precisão.
+
+13
+00:00:52,573 --> 00:00:56,270
+Com as ordens de serviço, você
+registra todas as peças recebidas
+
+14
+00:00:56,320 --> 00:00:59,489
+os ajustes solicitados,
+os valores e os prazos.
+
+15
+00:00:59,539 --> 00:01:02,022
+Uma mesma ordem pode reunir várias roupas
+
+16
+00:01:02,072 --> 00:01:06,667
+cada uma com as suas informações,
+fotografias e acompanhamento individual.
+
+17
+00:01:24,845 --> 00:01:27,856
+O aplicativo também
+organiza toda a produção.
+
+18
+00:01:27,906 --> 00:01:30,086
+Você acompanha o andamento das peças
+
+19
+00:01:30,136 --> 00:01:34,237
+distribui os trabalhos entre as
+costureiras e controla a agenda de provas
+
+20
+00:01:34,287 --> 00:01:36,208
+compromissos e entregas.
+
+21
+00:01:47,300 --> 00:01:50,315
+Tenha também controle sobre
+os materiais utilizados
+
+22
+00:01:50,365 --> 00:01:52,588
+acompanhe o estoque de
+tecidos e aviamentos
+
+23
+00:01:52,638 --> 00:01:55,125
+e organize os preços dos serviços.
+
+24
+00:01:55,175 --> 00:01:56,235
+Tudo integrado
+
+25
+00:01:56,285 --> 00:02:00,093
+para facilitar a gestão e ajudar
+nas decisões do dia a dia.
+
+26
+00:02:09,397 --> 00:02:13,460
+Na gestão financeira, é possível
+acompanhar recebimentos, pagamentos
+
+27
+00:02:13,510 --> 00:02:15,817
+despesas e valores pendentes.
+
+28
+00:02:15,867 --> 00:02:18,833
+Os relatórios e gráficos
+ajudam a entender o desempenho
+
+29
+00:02:18,883 --> 00:02:22,232
+do ateliê e a tomar
+decisões com mais segurança.
+
+30
+00:02:30,989 --> 00:02:34,623
+A comunicação com as clientes
+também fica mais prática.
+
+31
+00:02:34,673 --> 00:02:37,078
+Você pode preparar avisos pelo WhatsApp
+
+32
+00:02:37,128 --> 00:02:39,588
+gerar comprovantes e
+personalizar os documentos
+
+33
+00:02:39,638 --> 00:02:41,990
+com a identidade do seu ateliê.
+
+34
+00:02:50,463 --> 00:02:53,966
+E o melhor: o aplicativo funciona
+no computador e no celular
+
+35
+00:02:54,016 --> 00:02:56,140
+e pode continuar evoluindo.
+
+36
+00:02:56,190 --> 00:02:57,413
+Novas ferramentas
+
+37
+00:02:57,463 --> 00:03:00,489
+módulos e personalizações podem
+ser desenvolvidos conforme
+
+38
+00:03:00,539 --> 00:03:03,512
+as necessidades e o
+crescimento do negócio.
+
+39
+00:03:05,463 --> 00:03:06,841
+Ateliê Jessica.
+
+40
+00:03:06,891 --> 00:03:09,254
+Mais organização, praticidade e tecnologia
+
+41
+00:03:09,304 --> 00:03:12,602
+para você dedicar mais tempo
+ao que realmente importa.
